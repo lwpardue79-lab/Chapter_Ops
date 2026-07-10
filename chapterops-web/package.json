@@ -2,8 +2,10 @@
   "name": "chapterops-lite-web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "python3 -m http.server 4173",
-    "start": "python3 -m http.server 4173"
+    "start": "python3 -m http.server 4173",
+    "build": "mkdir -p dist && cp index.html styles.css app.js config.js dist/"
   }
 }

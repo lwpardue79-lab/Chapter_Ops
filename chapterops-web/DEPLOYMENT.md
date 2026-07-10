@@ -27,8 +27,8 @@ vercel --prod
 If Vercel asks for framework settings, use:
 
 - Framework preset: Other
-- Build command: leave blank
-- Output directory: leave blank
+- Build command: `npm run build`
+- Output directory: `dist`
 - Install command: leave blank
 
 ## Supabase connection
