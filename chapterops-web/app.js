@@ -142,9 +142,10 @@ async function initCloud() {
   cloud.client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey);
   const { data } = await cloud.client.auth.getSession();
   cloud.user = data.session?.user || null;
-  cloud.client.auth.onAuthStateChange(async (_event, session) => {
+  cloud.client.auth.onAuthStateChange(async (event, session) => {
     cloud.user = session?.user || null;
     updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required for real cloud data");
+    if (event === "PASSWORD_RECOVERY") openNewPasswordModal();
     if (cloud.user) await loadCloudWorkspace();
     render();
   });
@@ -160,11 +161,49 @@ function updateCloudUi(message) {
 }
 
 async function signIn() {
+  openAuthModal("signin");
+}
+
+async function signInWithPassword(email, password) {
   if (!cloud.client) return toast("Supabase is not configured.");
-  const email = prompt("Enter your email address for a secure sign-in link:");
-  if (!email) return;
-  const { error } = await cloud.client.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
-  toast(error ? error.message : "Check your email for the sign-in link.");
+  const { error } = await cloud.client.auth.signInWithPassword({ email, password });
+  if (error) return toast(error.message);
+  closeModal();
+  toast("Signed in.");
+}
+
+async function createAccount(email, password, confirmPassword, fullName) {
+  if (!cloud.client) return toast("Supabase is not configured.");
+  if (password.length < 8) return toast("Password must be at least 8 characters.");
+  if (password !== confirmPassword) return toast("Passwords do not match.");
+  const { error } = await cloud.client.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: window.location.origin,
+      data: { full_name: fullName || "" }
+    }
+  });
+  if (error) return toast(error.message);
+  closeModal();
+  toast("Account created. Check your email if confirmation is required.");
+}
+
+async function sendPasswordReset(email) {
+  if (!cloud.client) return toast("Supabase is not configured.");
+  if (!email) return toast("Enter your email address first.");
+  const { error } = await cloud.client.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+  toast(error ? error.message : "Password reset email sent.");
+}
+
+async function updateAccountPassword(password, confirmPassword) {
+  if (!cloud.client) return toast("Supabase is not configured.");
+  if (password.length < 8) return toast("Password must be at least 8 characters.");
+  if (password !== confirmPassword) return toast("Passwords do not match.");
+  const { error } = await cloud.client.auth.updateUser({ password });
+  if (error) return toast(error.message);
+  closeModal();
+  toast("Password updated.");
 }
 
 async function signOut() {
@@ -347,6 +386,7 @@ function render() {
   const root = document.getElementById("appRoot");
   if (cloud.client && !cloud.user) {
     root.innerHTML = renderLoginGate();
+    bindAuthActions(root);
     return;
   }
   root.innerHTML = ({
@@ -361,17 +401,35 @@ function render() {
     settings: renderSettings
   }[activeView] || renderDashboard)();
   bindViewActions(root);
+  bindAuthActions(root);
 }
 
 function renderLoginGate() {
-  return `<section class="hero">
-    <div>
+  return `<section class="auth-shell">
+    <div class="auth-card">
       <p class="eyebrow">Private chapter operations</p>
-      <h3>Sign in to access Alpha Omega Chapter Operations.</h3>
+      <h3>Sign in to Alpha Omega Chapter Operations</h3>
+      <p class="muted">Use your email and password. Supabase handles password storage and sessions securely.</p>
+      <form id="loginForm" class="auth-form">
+        <label>Email<input name="email" type="email" autocomplete="email" required /></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
+        <button class="primary" type="submit">Sign in</button>
+      </form>
+      <div class="button-row">
+        <button class="ghost" data-auth-mode="signup">Create account</button>
+        <button class="ghost" data-auth-mode="reset">Forgot password</button>
+      </div>
+    </div>
+  </section>
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Privacy first</p>
+      <h3>Chapter data stays behind login.</h3>
       <p>This workspace can contain member records, dues, payments, attendance, tasks, and notes. For privacy, chapter data is not shown until you sign in.</p>
     </div>
     <div class="hero-actions">
-      <button class="primary" onclick="document.getElementById('signInBtn').click()">Sign in</button>
+      <button class="primary" data-auth-mode="signin">Sign in</button>
+      <button class="ghost" data-auth-mode="signup">Create account</button>
     </div>
   </section>
   <section class="panel">
@@ -690,6 +748,64 @@ function bindViewActions(root) {
   if (checkType) checkType.addEventListener("change", refreshCheckPerson);
   const record = root.querySelector("[data-record-checkin]");
   if (record) record.addEventListener("click", recordCheckin);
+}
+
+function bindAuthActions(root = document) {
+  root.querySelectorAll("[data-auth-mode]").forEach((el) => el.addEventListener("click", () => openAuthModal(el.dataset.authMode)));
+  root.querySelector("#loginForm")?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const form = Object.fromEntries(new FormData(ev.currentTarget).entries());
+    await signInWithPassword(form.email, form.password);
+  });
+}
+
+function openAuthModal(mode = "signin") {
+  if (!cloud.client) return toast("Supabase is not configured.");
+  const isSignup = mode === "signup";
+  const isReset = mode === "reset";
+  openModal(`<section class="auth-modal">
+    <p class="eyebrow">${isSignup ? "Create account" : isReset ? "Password reset" : "Sign in"}</p>
+    <h3>${isSignup ? "Create your ChapterOps account" : isReset ? "Reset your password" : "Sign in to ChapterOps"}</h3>
+    <p class="muted">${isSignup ? "Use an email and password. If email confirmation is enabled, Supabase will send a confirmation email." : isReset ? "Enter your email and Supabase will send a secure reset link." : "Enter the email and password for your ChapterOps account."}</p>
+    <form id="authModalForm" class="form-grid">
+      ${isSignup ? `<label class="wide">Full name<input name="fullName" autocomplete="name" /></label>` : ""}
+      <label class="wide">Email<input name="email" type="email" autocomplete="email" required /></label>
+      ${!isReset ? `<label class="wide">Password<input name="password" type="password" autocomplete="${isSignup ? "new-password" : "current-password"}" minlength="8" required /></label>` : ""}
+      ${isSignup ? `<label class="wide">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required /></label>` : ""}
+      <div class="wide button-row">
+        <button class="primary" type="submit">${isSignup ? "Create account" : isReset ? "Send reset email" : "Sign in"}</button>
+        ${!isSignup ? `<button class="ghost" type="button" data-auth-mode="signup">Create account</button>` : `<button class="ghost" type="button" data-auth-mode="signin">I already have an account</button>`}
+        ${!isReset ? `<button class="ghost" type="button" data-auth-mode="reset">Forgot password</button>` : `<button class="ghost" type="button" data-auth-mode="signin">Back to sign in</button>`}
+        <button class="ghost" type="button" data-close-modal>Cancel</button>
+      </div>
+    </form>
+  </section>`);
+  bindAuthActions(document.getElementById("modal"));
+  document.getElementById("authModalForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const form = Object.fromEntries(new FormData(ev.currentTarget).entries());
+    if (isSignup) await createAccount(form.email, form.password, form.confirmPassword, form.fullName);
+    else if (isReset) await sendPasswordReset(form.email);
+    else await signInWithPassword(form.email, form.password);
+  });
+}
+
+function openNewPasswordModal() {
+  openModal(`<section class="auth-modal">
+    <p class="eyebrow">Set new password</p>
+    <h3>Create a new ChapterOps password</h3>
+    <p class="muted">Your reset link was accepted. Enter a new password to finish account recovery.</p>
+    <form id="newPasswordForm" class="form-grid">
+      <label class="wide">New password<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
+      <label class="wide">Confirm new password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required /></label>
+      <div class="wide button-row"><button class="primary" type="submit">Update password</button><button class="ghost" type="button" data-close-modal>Cancel</button></div>
+    </form>
+  </section>`);
+  document.getElementById("newPasswordForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const form = Object.fromEntries(new FormData(ev.currentTarget).entries());
+    await updateAccountPassword(form.password, form.confirmPassword);
+  });
 }
 
 function applyFilter(view, filter) {

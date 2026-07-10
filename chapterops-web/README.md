@@ -24,7 +24,8 @@ https://chapterops-lite.vercel.app/
 
 ## Privacy and security
 
-- Sign in before entering real chapter data.
+- Create an account or sign in with email/password before entering real chapter data.
+- Password reset is handled through Supabase Auth.
 - Supabase Auth and RLS protect the cloud workspace.
 - The browser app uses only a publishable Supabase key. Do not add a service-role key to frontend code.
 - Financial views are restricted in the UI to Admin, Treasurer, Assistant Treasurer, and President roles.

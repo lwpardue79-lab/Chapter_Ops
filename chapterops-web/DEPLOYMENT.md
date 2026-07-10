@@ -34,7 +34,7 @@ The app is configured for the existing ChapterOps Supabase project:
 https://hjgyigdxlempsfqgjttt.supabase.co
 ```
 
-It uses Supabase Auth plus an RLS-protected cloud workspace table. The frontend key in `config.js` is a publishable key and is safe for browser use. Do not add a service-role key to this app.
+It uses Supabase Auth email/password accounts plus an RLS-protected cloud workspace table. The frontend key in `config.js` is a publishable key and is safe for browser use. Do not add a service-role key to this app.
 
 After deploy, confirm Supabase Authentication URL settings include:
 
