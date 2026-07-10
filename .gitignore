@@ -1,0 +1,8 @@
+node_modules/
+.pnpm-store/
+.DS_Store
+*.log
+outputs/**/~$*
+chapterops-web/*.zip
+outputs/chapterops-lite/*.png
+outputs/chapterops-lite/*.inspect.ndjson
