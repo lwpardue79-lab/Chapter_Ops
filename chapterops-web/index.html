@@ -3,245 +3,64 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ChapterOps Lite</title>
+    <title>Alpha Omega Chapter Operations</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="brand-mark">CO</div>
+          <div class="brand-mark">AO</div>
           <div>
-            <h1>ChapterOps</h1>
-            <p>Lite web trial</p>
+            <h1>AO Chapter Ops</h1>
+            <p>Alpha Omega · Pi Kappa Alpha</p>
           </div>
         </div>
-        <nav class="nav" aria-label="Primary">
-          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        <nav class="nav" aria-label="Primary navigation">
+          <button class="nav-item active" data-view="dashboard">Executive Dashboard</button>
           <button class="nav-item" data-view="members">Members</button>
-          <button class="nav-item" data-view="events">Events</button>
-          <button class="nav-item" data-view="attendance">Attendance</button>
-          <button class="nav-item" data-view="dues">Dues</button>
-          <button class="nav-item" data-view="reimbursements">Reimbursements</button>
-          <button class="nav-item" data-view="report">Weekly Report</button>
+          <button class="nav-item" data-view="recruitment">Recruitment / PNMs</button>
+          <button class="nav-item" data-view="events">Events & Attendance</button>
+          <button class="nav-item" data-view="finance">Finance / Dues</button>
+          <button class="nav-item" data-view="tasks">Tasks / Follow-Ups</button>
+          <button class="nav-item" data-view="leadership">Officers & Committees</button>
+          <button class="nav-item" data-view="reports">Reports</button>
           <button class="nav-item" data-view="settings">Settings</button>
         </nav>
         <div class="sidebar-card">
-          <p class="eyebrow">Weekend mode</p>
-          <p>Use sample data, enter 5–10 real records, then export a backup before the trial.</p>
+          <p class="eyebrow">Chapter-ready trial</p>
+          <p>Use demo data for walkthroughs. Sign in before adding real member or PNM information.</p>
         </div>
       </aside>
 
       <main class="main">
         <header class="topbar">
           <div>
-            <p class="eyebrow" id="orgLabel">Demo Chapter / Student Organization</p>
-            <h2 id="viewTitle">Dashboard</h2>
+            <p class="eyebrow" id="orgLabel">Alpha Omega Chapter · Pi Kappa Alpha</p>
+            <h2 id="viewTitle">Executive Dashboard</h2>
           </div>
           <div class="topbar-actions">
-            <span class="cloud-status" id="cloudStatus">Local mode</span>
+            <span class="cloud-status" id="cloudStatus">Demo / local mode</span>
+            <button class="ghost" id="undoBtn" title="Undo last change">Undo</button>
             <button class="ghost" id="signInBtn">Sign in</button>
             <button class="ghost hidden" id="syncBtn">Sync cloud</button>
             <button class="ghost hidden" id="signOutBtn">Sign out</button>
-            <button class="ghost" id="importBtn">Import</button>
-            <button class="ghost" id="exportBtn">Export</button>
+            <button class="ghost" id="importBtn">Import CSV/JSON</button>
+            <button class="ghost" id="exportBtn">Backup</button>
             <button class="primary" id="resetBtn">Reset demo</button>
-            <input hidden id="importFile" type="file" accept="application/json" />
+            <input hidden id="importFile" type="file" accept=".json,.csv,text/csv,application/json" />
           </div>
         </header>
 
-        <section class="view active" id="dashboard">
-          <div class="hero">
-            <div>
-              <p class="eyebrow">Operating snapshot</p>
-              <h3>Everything your exec team needs in one clean view.</h3>
-              <p>Track members, events, attendance, dues, reimbursements, and weekly action items without bouncing between group chats and scattered spreadsheets.</p>
-            </div>
-            <div class="hero-actions">
-              <button class="primary" data-open-view="attendance">Run event check-in</button>
-              <button class="ghost" data-open-view="report">Generate report</button>
-            </div>
-          </div>
-          <div class="kpi-grid" id="kpiGrid"></div>
-          <div class="two-col">
-            <section class="panel">
-              <div class="panel-head">
-                <h3>Needs follow-up</h3>
-                <span class="pill">Attendance threshold</span>
-              </div>
-              <div id="followUpList" class="stack-list"></div>
-            </section>
-            <section class="panel">
-              <div class="panel-head">
-                <h3>Upcoming events</h3>
-                <span class="pill">Next 7 days</span>
-              </div>
-              <div id="upcomingList" class="stack-list"></div>
-            </section>
-          </div>
-        </section>
-
-        <section class="view" id="members">
-          <div class="split">
-            <form class="panel form-card" data-form="members">
-              <h3>Add member</h3>
-              <div class="form-grid">
-                <label>First name<input name="first_name" required /></label>
-                <label>Last name<input name="last_name" required /></label>
-                <label>Email<input name="email" type="email" /></label>
-                <label>Phone<input name="phone" /></label>
-                <label>Status<select name="status"><option>Member</option><option>Associate/New Member</option><option>Advisor</option><option>Alumni</option></select></label>
-                <label>Class year<input name="class_year" type="number" min="2020" max="2040" /></label>
-                <label>Role<input name="role" value="Member" /></label>
-                <label>Join date<input name="join_date" type="date" /></label>
-                <label>Active status<select name="active_status"><option>Active</option><option>Inactive</option></select></label>
-                <label class="wide">Notes<input name="notes" /></label>
-              </div>
-              <button class="primary" type="submit">Add member</button>
-            </form>
-            <section class="panel table-panel">
-              <div class="panel-head">
-                <h3>Member database</h3>
-                <input class="search" data-search="membersTable" placeholder="Search members" />
-              </div>
-              <div class="table-wrap"><table id="membersTable"></table></div>
-            </section>
-          </div>
-        </section>
-
-        <section class="view" id="events">
-          <div class="split">
-            <form class="panel form-card" data-form="events">
-              <h3>Add event</h3>
-              <div class="form-grid">
-                <label>Event name<input name="event_name" required /></label>
-                <label>Date<input name="event_date" type="date" required /></label>
-                <label>Time<input name="event_time" type="time" /></label>
-                <label>Category<input name="event_category" placeholder="Operations, Service, Social" /></label>
-                <label>Required<select name="required"><option>Yes</option><option>No</option></select></label>
-                <label>Location<input name="location" /></label>
-                <label>Created by<select name="created_by" data-member-options></select></label>
-                <label class="wide">Notes<input name="notes" /></label>
-              </div>
-              <button class="primary" type="submit">Add event</button>
-            </form>
-            <section class="panel table-panel">
-              <div class="panel-head">
-                <h3>Event tracker</h3>
-                <input class="search" data-search="eventsTable" placeholder="Search events" />
-              </div>
-              <div class="table-wrap"><table id="eventsTable"></table></div>
-            </section>
-          </div>
-        </section>
-
-        <section class="view" id="attendance">
-          <div class="split">
-            <form class="panel form-card" data-form="attendance">
-              <h3>Event check-in</h3>
-              <p class="muted">Use this on a laptop at the door or on a phone. For QR later, this same flow can become a public check-in page.</p>
-              <div class="form-grid">
-                <label>Event<select name="event_id" data-event-options required></select></label>
-                <label>Member<select name="member_id" data-member-options required></select></label>
-                <label>Status<select name="attendance_status"><option>Present</option><option>Late</option><option>Absent</option></select></label>
-                <label>Excuse status<select name="excuse_status"><option>Not Needed</option><option>Not Requested</option><option>Pending</option><option>Approved</option><option>Denied</option></select></label>
-                <label class="wide">Notes<input name="notes" /></label>
-              </div>
-              <button class="primary" type="submit">Record check-in</button>
-            </form>
-            <section class="panel table-panel">
-              <div class="panel-head">
-                <h3>Attendance log</h3>
-                <input class="search" data-search="attendanceTable" placeholder="Search attendance" />
-              </div>
-              <div class="table-wrap"><table id="attendanceTable"></table></div>
-            </section>
-          </div>
-        </section>
-
-        <section class="view" id="dues">
-          <div class="split">
-            <form class="panel form-card" data-form="dues">
-              <h3>Add dues row</h3>
-              <div class="form-grid">
-                <label>Member<select name="member_id" data-member-options required></select></label>
-                <label>Semester<input name="semester" value="Fall 2026" /></label>
-                <label>Amount owed<input name="amount_owed" type="number" step="0.01" required /></label>
-                <label>Amount paid<input name="amount_paid" type="number" step="0.01" value="0" /></label>
-                <label>Due date<input name="due_date" type="date" /></label>
-                <label>Payment status<select name="payment_status"><option>Unpaid</option><option>Partial</option><option>Paid</option><option>Overdue</option></select></label>
-                <label>Payment plan<select name="payment_plan"><option>No</option><option>Yes</option></select></label>
-                <label class="wide">Notes<input name="notes" /></label>
-              </div>
-              <button class="primary" type="submit">Add dues row</button>
-            </form>
-            <section class="panel table-panel">
-              <div class="panel-head">
-                <h3>Dues tracker</h3>
-                <input class="search" data-search="duesTable" placeholder="Search dues" />
-              </div>
-              <div class="table-wrap"><table id="duesTable"></table></div>
-            </section>
-          </div>
-        </section>
-
-        <section class="view" id="reimbursements">
-          <div class="split">
-            <form class="panel form-card" data-form="reimbursements">
-              <h3>Add reimbursement</h3>
-              <div class="form-grid">
-                <label>Member<select name="member_id" data-member-options required></select></label>
-                <label>Request date<input name="request_date" type="date" /></label>
-                <label>Amount<input name="amount" type="number" step="0.01" required /></label>
-                <label>Budget category<input name="budget_category" /></label>
-                <label>Event<select name="event_id" data-event-options></select></label>
-                <label>Receipt link<input name="receipt_link" type="url" /></label>
-                <label class="wide">Description<input name="description" /></label>
-                <label>Approval status<select name="approval_status"><option>Pending</option><option>Approved</option><option>Denied</option></select></label>
-                <label>Paid status<select name="paid_status"><option>Unpaid</option><option>Paid</option></select></label>
-                <label class="wide">Notes<input name="notes" /></label>
-              </div>
-              <button class="primary" type="submit">Add request</button>
-            </form>
-            <section class="panel table-panel">
-              <div class="panel-head">
-                <h3>Reimbursement tracker</h3>
-                <input class="search" data-search="reimbursementsTable" placeholder="Search reimbursements" />
-              </div>
-              <div class="table-wrap"><table id="reimbursementsTable"></table></div>
-            </section>
-          </div>
-        </section>
-
-        <section class="view" id="report">
-          <section class="panel">
-            <div class="panel-head">
-              <h3>Weekly executive report</h3>
-              <div class="button-row">
-                <button class="ghost" id="copyReportBtn">Copy report</button>
-                <button class="primary" onclick="window.print()">Print / Save PDF</button>
-              </div>
-            </div>
-            <div id="weeklyReport" class="report"></div>
-          </section>
-        </section>
-
-        <section class="view" id="settings">
-          <form class="panel form-card settings-card" id="settingsForm">
-            <h3>Settings</h3>
-            <div class="form-grid">
-              <label>Chapter / organization name<input name="chapter_name" /></label>
-              <label>Exec email list<input name="exec_email_list" /></label>
-              <label>Attendance threshold<input name="attendance_threshold" type="number" min="0" max="100" step="1" /></label>
-              <label>Report day<input name="report_day" /></label>
-              <label>Report sender name<input name="report_sender_name" /></label>
-            </div>
-            <button class="primary" type="submit">Save settings</button>
-          </form>
-        </section>
+        <div id="appRoot"></div>
       </main>
     </div>
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <div class="modal-backdrop hidden" id="modalBackdrop" role="dialog" aria-modal="true">
+      <section class="modal" id="modal"></section>
+    </div>
+    <div class="toast hidden" id="toast"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./config.js"></script>
     <script src="./app.js"></script>

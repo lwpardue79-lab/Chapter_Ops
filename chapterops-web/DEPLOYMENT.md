@@ -1,77 +1,62 @@
-# ChapterOps Lite Deployment Path
+# Deployment Notes
 
-## Fastest public URL
+## Vercel production
 
-Use Vercel as a static site:
+The correct production project is:
 
-1. Create a GitHub repo.
-2. Push the `chapterops-web` folder.
-3. In Vercel, import the repo.
-4. Set the project root to `chapterops-web`.
-5. Leave build command blank.
-6. Leave output directory blank.
-7. Deploy.
+```text
+https://chapterops-lite.vercel.app/
+```
 
-That gives you a public Vercel URL.
-
-## CLI deploy option
-
-If the Vercel CLI is available:
+Deploy from the repository root:
 
 ```bash
-cd "/Users/lukepardue/Documents/Greek life dashboard/chapterops-web"
-vercel
 vercel --prod
 ```
 
-If Vercel asks for framework settings, use:
+Root-level `vercel.json` runs:
 
-- Framework preset: Other
-- Build command: `npm run build`
-- Output directory: `dist`
-- Install command: leave blank
+```bash
+node scripts/build-sites.mjs
+```
+
+and serves:
+
+```text
+dist/
+```
 
 ## Supabase connection
 
-This build is already configured for the existing Supabase project:
+The app is configured for the existing ChapterOps Supabase project:
 
 ```text
 https://hjgyigdxlempsfqgjttt.supabase.co
 ```
 
-It uses Supabase Auth plus a cloud workspace sync table protected by RLS. The publishable frontend key is safe to ship in browser code. Do not add a service-role key to this app.
+It uses Supabase Auth plus an RLS-protected cloud workspace table. The frontend key in `config.js` is a publishable key and is safe for browser use. Do not add a service-role key to the app.
 
-After the Vercel deployment is live, update Supabase Auth URL settings:
+After deploy, confirm Supabase Authentication URL settings include:
 
-1. Go to Supabase Dashboard → ChapterOps → Authentication → URL Configuration.
-2. Set Site URL to your Vercel production URL.
-3. Add redirect URLs:
-   - `http://localhost:4173`
-   - your Vercel production URL
+- Site URL: `https://chapterops-lite.vercel.app`
+- Redirect URLs:
+  - `https://chapterops-lite.vercel.app`
+  - `http://localhost:4173`
 
-Without this, email sign-in links may redirect to the wrong place.
+## Product-grade next step
 
-## Important product warning
+The current app is ready for a chapter demo and early controlled use. For a stronger multi-user production release, convert the JSON workspace into normalized Supabase tables:
 
-The current version syncs the entire ChapterOps workspace as one Supabase JSON document. That is fine for a beta/demo URL and weekend pilot. For real multi-officer production, the next step is a normalized relational schema with invites, officer roles, and per-table queries.
+- organizations
+- organization_members
+- members
+- pnms
+- events
+- attendance
+- finance_items
+- tasks
+- leadership_roles
+- activity_log
+- settings
 
-## Real production architecture
-
-- Frontend: Next.js app using this UI
-- Auth: Supabase Auth
-- Database: Supabase Postgres
-- Tables: organizations, members, events, attendance, dues, reimbursements, reports, settings
-- Roles: admin, president, treasurer, secretary, read-only advisor
-- Storage: receipt uploads
-- Email: weekly report via Resend, SendGrid, or Supabase Edge Function
-- Payments: Stripe for dues collection and reconciliation
-
-## Suggested build order
-
-1. Convert this static UI into Next.js pages/components.
-2. Add Supabase schema and Row Level Security.
-3. Add login and organization-level roles.
-4. Move local state to Supabase queries/mutations.
-5. Add receipt upload.
-6. Add hosted executive report emails.
-7. Add Stripe dues payment links.
+Then add per-table RLS policies for Admin, President, Treasurer, Recruitment/VPMD, Exec Board, Committee Chair, Active Member, and Read-only Advisor.

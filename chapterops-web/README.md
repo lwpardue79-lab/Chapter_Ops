@@ -1,13 +1,27 @@
-# ChapterOps Lite Web App
+# Alpha Omega Chapter Operations
 
-This is the website version of ChapterOps Lite. It is designed for a weekend pilot with a treasurer or executive officer, and structured so it can be moved to Vercel/Supabase when you are ready for a public multi-user version.
+ChapterOps Lite is now configured as **Alpha Omega Chapter Operations** for the Alpha Omega Chapter of Pi Kappa Alpha. It is a mobile-friendly chapter operations web app for executive dashboarding, member management, recruitment/PNM tracking, events, attendance, dues, tasks, committees, reports, and settings.
 
-## Run it as a local website
+## Live app
 
-From this folder:
+Production URL:
+
+```text
+https://chapterops-lite.vercel.app/
+```
+
+## Run locally
+
+From the repo root:
 
 ```bash
-python3 -m http.server 4173
+npm run dev
+```
+
+Or from this folder:
+
+```bash
+python3 -m http.server 4173 --directory .
 ```
 
 Then open:
@@ -16,49 +30,42 @@ Then open:
 http://localhost:4173
 ```
 
-## Deploy to Vercel
+## What is included
 
-The app is static-site ready. Import this folder into Vercel, or run:
+- Executive dashboard with active members, new members, PNMs, upcoming events, attendance alerts, dues summary, open tasks, follow-ups, activity, and quick actions.
+- Member roster with add/edit/archive/delete, search, filters, profiles, committees, dues status, attendance rate, notes, tags, and CSV export.
+- Recruitment / PNM module with assigned recruiter, referral source, events, follow-up date, status workflow, bid extended/accepted/declined dates, and recruitment reports.
+- Events and attendance module with event types, required/optional status, member and PNM attendance, excused/unexcused attendance, and phone-friendly check-in.
+- Finance / dues tracking for dues owed/paid, past due balances, budget categories, expenses, reimbursements, event budgets, fundraising income, and finance summaries.
+- Tasks and follow-ups for officer work, member follow-ups, PNM follow-ups, finance follow-ups, event logistics, and exec action items.
+- Officers and committees module for leadership assignments, responsibilities, and related reports.
+- Reports page with chapter overview, attendance summary, dues summary, recruitment summary, event participation, follow-ups, overdue tasks, finance summary, CSV export, and print/PDF export.
+- Settings for chapter name, school, term, academic year, role selection, attendance threshold, privacy notice, demo reset, and import/export.
+- Demo data for 50 fake members, 20 fake PNMs, 8 events, finance rows, attendance records, tasks, and leadership assignments.
+
+## Privacy and safety model
+
+- Demo/local mode is safe for walkthroughs.
+- Sign in before adding real member, PNM, finance, or attendance information.
+- Supabase Auth and RLS protect the cloud workspace.
+- The browser app uses a publishable Supabase key only; never add a service-role key to frontend code.
+- Finance and sensitive recruitment views are role-aware in the UI.
+- Archive is preferred over permanent delete.
+- Important status changes require confirmation and can be undone.
+- Avoid unnecessary sensitive notes.
+
+## Current architecture
+
+This is a static Vercel app with Supabase Auth and a cloud workspace sync table. For speed and reliability in the current MVP, the app stores the chapter workspace as one JSON document per organization.
+
+Next production step: normalize the workspace into Supabase tables for members, PNMs, events, attendance, finance, tasks, leadership, activity logs, and per-role policies.
+
+## Deployment
+
+The root project contains the Vercel build config. Deploy from the repo root:
 
 ```bash
 vercel --prod
 ```
 
-Use the project root:
-
-```text
-chapterops-web
-```
-
-## How to use it this weekend
-
-1. Open the local URL above.
-2. Go to Settings and update the chapter / organization name.
-3. Add 5–10 real members.
-4. Add one real event.
-5. Use Attendance to record a test check-in.
-6. Add or update dues rows with the treasurer.
-7. Add one reimbursement request.
-8. Review Dashboard.
-9. Open Weekly Report and copy or print it.
-10. Use Export to save a JSON backup of the trial data.
-
-## What works now
-
-- Dashboard metrics
-- Member database
-- Event tracker
-- Attendance check-in with duplicate check-in updating
-- Dues and balance tracking
-- Reimbursement tracking
-- Weekly executive report
-- Settings
-- Searchable tables
-- Quick actions for common officer tasks
-- Local browser storage
-- Supabase Auth and cloud workspace sync
-- JSON import/export backup
-
-## Important limitation
-
-This version now supports Supabase cloud sync, but the data is synced as a whole workspace document for speed. The next product-grade step is converting the workspace document into normalized Supabase tables with per-page queries, role-specific screens, and invite flows.
+The build copies `chapterops-web/` into `dist/` for Vercel.
