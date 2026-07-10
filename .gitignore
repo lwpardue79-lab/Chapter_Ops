@@ -3,6 +3,8 @@ node_modules
 .pnpm-store/
 .DS_Store
 *.log
+dist/
+chapterops-web/dist/
 outputs/**/~$*
 chapterops-web/*.zip
 outputs/chapterops-lite/*.png
