@@ -1,0 +1,10 @@
+{
+  "name": "chapterops-lite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "mkdir -p dist && cp chapterops-web/index.html chapterops-web/styles.css chapterops-web/app.js chapterops-web/config.js dist/",
+    "dev": "python3 -m http.server 4173 --directory chapterops-web"
+  }
+}
