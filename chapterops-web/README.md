@@ -1,16 +1,37 @@
 # Alpha Omega Chapter Operations
 
-ChapterOps Lite is now configured as **Alpha Omega Chapter Operations** for the Alpha Omega Chapter of Pi Kappa Alpha. It is a mobile-friendly chapter operations web app for executive dashboarding, member management, recruitment/PNM tracking, events, attendance, dues, tasks, committees, reports, and settings.
+ChapterOps Lite is configured for the **Alpha Omega Chapter of Pi Kappa Alpha at Kansas State University**.
+
+This build is for real setup and real data entry by chapter leadership and the Treasurer. It does not seed member, dues, PNM, event, finance, or attendance records.
 
 ## Live app
-
-Production URL:
 
 ```text
 https://chapterops-lite.vercel.app/
 ```
 
-## Run locally
+## Core modules
+
+- First-time setup for chapter name, school, term, academic year, default dues amount, due dates, roles, statuses, event types, committees, permissions, and privacy notice.
+- Member roster with add/edit/archive/delete, profiles, search, filters, duplicate detection, CSV import, and CSV export.
+- Treasurer / dues tracker with charges, payments, payment status, payment plans, waived entries, due dates, payment methods, Treasurer notes, member balances, and exports.
+- Treasurer dashboard with billed, collected, outstanding, unpaid, partially paid, paid, past due, plans, and quick actions.
+- Events and attendance with event creation, required/optional tracking, member/PNM attendance, excused/unexcused statuses, and attendance export.
+- Tasks and officer follow-ups.
+- Officers and committees.
+- Reports for roster, dues, outstanding balances, payment history, attendance, event participation, officer tasks, and executive summary.
+- Activity log for important changes.
+
+## Privacy and security
+
+- Sign in before entering real chapter data.
+- Supabase Auth and RLS protect the cloud workspace.
+- The browser app uses only a publishable Supabase key. Do not add a service-role key to frontend code.
+- Financial views are restricted in the UI to Admin, Treasurer, Assistant Treasurer, and President roles.
+- Archive is preferred over permanent delete.
+- Delete actions require confirmation.
+
+## Local development
 
 From the repo root:
 
@@ -18,54 +39,18 @@ From the repo root:
 npm run dev
 ```
 
-Or from this folder:
+Or serve this folder:
 
 ```bash
-python3 -m http.server 4173 --directory .
+python3 -m http.server 4173 --directory chapterops-web
 ```
-
-Then open:
-
-```text
-http://localhost:4173
-```
-
-## What is included
-
-- Executive dashboard with active members, new members, PNMs, upcoming events, attendance alerts, dues summary, open tasks, follow-ups, activity, and quick actions.
-- Member roster with add/edit/archive/delete, search, filters, profiles, committees, dues status, attendance rate, notes, tags, and CSV export.
-- Recruitment / PNM module with assigned recruiter, referral source, events, follow-up date, status workflow, bid extended/accepted/declined dates, and recruitment reports.
-- Events and attendance module with event types, required/optional status, member and PNM attendance, excused/unexcused attendance, and phone-friendly check-in.
-- Finance / dues tracking for dues owed/paid, past due balances, budget categories, expenses, reimbursements, event budgets, fundraising income, and finance summaries.
-- Tasks and follow-ups for officer work, member follow-ups, PNM follow-ups, finance follow-ups, event logistics, and exec action items.
-- Officers and committees module for leadership assignments, responsibilities, and related reports.
-- Reports page with chapter overview, attendance summary, dues summary, recruitment summary, event participation, follow-ups, overdue tasks, finance summary, CSV export, and print/PDF export.
-- Settings for chapter name, school, term, academic year, role selection, attendance threshold, privacy notice, demo reset, and import/export.
-- Demo data for 50 fake members, 20 fake PNMs, 8 events, finance rows, attendance records, tasks, and leadership assignments.
-
-## Privacy and safety model
-
-- Demo/local mode is safe for walkthroughs.
-- Sign in before adding real member, PNM, finance, or attendance information.
-- Supabase Auth and RLS protect the cloud workspace.
-- The browser app uses a publishable Supabase key only; never add a service-role key to frontend code.
-- Finance and sensitive recruitment views are role-aware in the UI.
-- Archive is preferred over permanent delete.
-- Important status changes require confirmation and can be undone.
-- Avoid unnecessary sensitive notes.
-
-## Current architecture
-
-This is a static Vercel app with Supabase Auth and a cloud workspace sync table. For speed and reliability in the current MVP, the app stores the chapter workspace as one JSON document per organization.
-
-Next production step: normalize the workspace into Supabase tables for members, PNMs, events, attendance, finance, tasks, leadership, activity logs, and per-role policies.
 
 ## Deployment
 
-The root project contains the Vercel build config. Deploy from the repo root:
+Deploy from the repository root:
 
 ```bash
 vercel --prod
 ```
 
-The build copies `chapterops-web/` into `dist/` for Vercel.
+The root build copies `chapterops-web/` into `dist/` for Vercel.

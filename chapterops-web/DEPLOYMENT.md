@@ -1,12 +1,12 @@
 # Deployment Notes
 
-## Vercel production
-
-The correct production project is:
+## Production URL
 
 ```text
 https://chapterops-lite.vercel.app/
 ```
+
+## Deploy to Vercel
 
 Deploy from the repository root:
 
@@ -34,7 +34,7 @@ The app is configured for the existing ChapterOps Supabase project:
 https://hjgyigdxlempsfqgjttt.supabase.co
 ```
 
-It uses Supabase Auth plus an RLS-protected cloud workspace table. The frontend key in `config.js` is a publishable key and is safe for browser use. Do not add a service-role key to the app.
+It uses Supabase Auth plus an RLS-protected cloud workspace table. The frontend key in `config.js` is a publishable key and is safe for browser use. Do not add a service-role key to this app.
 
 After deploy, confirm Supabase Authentication URL settings include:
 
@@ -43,9 +43,9 @@ After deploy, confirm Supabase Authentication URL settings include:
   - `https://chapterops-lite.vercel.app`
   - `http://localhost:4173`
 
-## Product-grade next step
+## Next production hardening step
 
-The current app is ready for a chapter demo and early controlled use. For a stronger multi-user production release, convert the JSON workspace into normalized Supabase tables:
+The current app stores the chapter workspace as one RLS-protected JSON document for fast MVP use. For broader multi-user production, normalize into Supabase tables:
 
 - organizations
 - organization_members
@@ -53,10 +53,11 @@ The current app is ready for a chapter demo and early controlled use. For a stro
 - pnms
 - events
 - attendance
-- finance_items
+- dues_charges
+- payments
 - tasks
 - leadership_roles
 - activity_log
 - settings
 
-Then add per-table RLS policies for Admin, President, Treasurer, Recruitment/VPMD, Exec Board, Committee Chair, Active Member, and Read-only Advisor.
+Then add per-table RLS policies for Admin, Treasurer, Assistant Treasurer, President, Exec Board, Committee Chair, Active Member, and Read-only Advisor.
