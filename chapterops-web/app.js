@@ -8,6 +8,7 @@ const pct = (n, d) => d ? `${Math.round((n / d) * 100)}%` : "0%";
 const uid = (prefix) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 const safe = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[c]));
 const parseMoney = (v) => Number(String(v || 0).replace(/[$,]/g, "")) || 0;
+const setupDebug = (...args) => console.info("[ChapterOps setup]", ...args);
 
 const viewNames = {
   dashboard: "Executive Dashboard",
@@ -46,9 +47,35 @@ let activeFilters = {};
 let historyStack = [];
 let cloud = { client: null, user: null, profile: null, profiles: [], organizationId: localStorage.getItem(orgStoreKey) };
 let state = load();
+let setupSave = { saving: false, error: "", success: "", fieldErrors: {} };
 
 const can = (permission) => roleRules[state.settings.currentRole]?.includes("all") || roleRules[state.settings.currentRole]?.includes(permission);
 const canManage = (area) => can("all") || can(`manage_${area}`);
+
+function toDbRole(role = "") {
+  const key = String(role || "").toLowerCase();
+  if (key.includes("admin")) return "admin";
+  if (key.includes("president")) return "president";
+  if (key.includes("treasurer")) return "treasurer";
+  if (key.includes("secretary")) return "secretary";
+  if (key.includes("advisor")) return "advisor";
+  return "member";
+}
+
+function formatSupabaseError(err, fallback = "Supabase request failed.") {
+  if (!err) return fallback;
+  const parts = [err.message, err.details, err.hint, err.code].filter(Boolean);
+  return parts.length ? parts.join(" ") : fallback;
+}
+
+function logSupabaseError(scope, err) {
+  console.error(`[ChapterOps ${scope}]`, {
+    code: err?.code || "",
+    message: err?.message || "",
+    details: err?.details || "",
+    hint: err?.hint || ""
+  });
+}
 
 function emptyWorkspace() {
   return {
@@ -249,7 +276,7 @@ async function ensureOwnProfile(input = {}) {
     cloud.profile = existing;
   }
   const { data: membership } = await cloud.client.from("organization_members").select("organization_id, role").eq("user_id", cloud.user.id).limit(1).maybeSingle();
-  if (membership?.role === "Admin" && cloud.profile.approval_status !== "approved") {
+  if (toDbRole(membership?.role) === "admin" && cloud.profile.approval_status !== "approved") {
     const { data: updated, error: updateError } = await cloud.client.from("profiles").update({ approval_status: "approved", role: "Admin", updated_at: new Date().toISOString() }).eq("id", cloud.user.id).select("*").single();
     if (!updateError && updated) cloud.profile = updated;
   }
@@ -279,14 +306,14 @@ async function ensureCloudWorkspace() {
   if (cloud.profile?.role !== "Admin") throw new Error("Your account is approved but not assigned to a chapter workspace yet.");
   const { data: org, error: orgError } = await cloud.client.from("organizations").insert({ name: state.settings.chapterName, created_by: cloud.user.id }).select("id").single();
   if (orgError) throw orgError;
-  const { error: memberError } = await cloud.client.from("organization_members").insert({ organization_id: org.id, user_id: cloud.user.id, role: "Admin" });
+  const { error: memberError } = await cloud.client.from("organization_members").insert({ organization_id: org.id, user_id: cloud.user.id, role: "admin", email: cloud.user.email });
   if (memberError) throw memberError;
   cloud.organizationId = org.id;
   localStorage.setItem(orgStoreKey, org.id);
   return org.id;
 }
 
-async function loadCloudWorkspace() {
+async function loadCloudWorkspace(options = {}) {
   try {
     const organizationId = await ensureCloudWorkspace();
     const { data, error } = await cloud.client.from("workspace_state").select("*").eq("organization_id", organizationId).maybeSingle();
@@ -295,7 +322,9 @@ async function loadCloudWorkspace() {
     else await syncCloudWorkspace(false);
     save();
   } catch (err) {
-    toast(err.message || "Could not load cloud workspace.");
+    logSupabaseError("load workspace failed", err);
+    toast(formatSupabaseError(err, "Could not load cloud workspace."));
+    if (options.throwOnError) throw err;
   }
 }
 
@@ -306,7 +335,8 @@ async function syncCloudWorkspace(showToast = true) {
     if (error) throw error;
     if (showToast) toast("Cloud workspace synced.");
   } catch (err) {
-    toast(err.message || "Cloud sync failed.");
+    logSupabaseError("cloud sync failed", err);
+    toast(formatSupabaseError(err, "Cloud sync failed."));
   }
 }
 
@@ -766,13 +796,17 @@ function reportBlock(title, lines) {
 }
 
 function renderSettings() {
+  const saveLabel = setupSave.saving ? "Saving…" : "Save setup";
+  const fieldError = (key) => setupSave.fieldErrors?.[key] ? `<p class="field-error">${safe(setupSave.fieldErrors[key])}</p>` : "";
   return `<section class="panel">
-    <div class="panel-head"><div><p class="eyebrow">First-time setup</p><h3>Chapter configuration</h3></div><button class="primary" data-save-settings>Save setup</button></div>
+    <div class="panel-head"><div><p class="eyebrow">First-time setup</p><h3>Chapter configuration</h3></div><button class="primary" data-save-settings ${setupSave.saving ? "disabled" : ""}>${saveLabel}</button></div>
+    ${setupSave.error ? `<div class="notice error-notice"><h4>Setup could not be saved</h4><p>${safe(setupSave.error)}</p><button class="ghost" data-save-settings ${setupSave.saving ? "disabled" : ""}>Retry save</button></div>` : ""}
+    ${setupSave.success ? `<div class="notice success-notice"><h4>Chapter setup saved successfully</h4><p>${safe(setupSave.success)}</p></div>` : ""}
     <div class="form-grid">
-      ${settingInput("chapterName", "Chapter name")}
-      ${settingInput("schoolName", "School")}
-      ${settingInput("term", "Term / semester")}
-      ${settingInput("academicYear", "Academic year")}
+      ${settingInput("chapterName", "Chapter name", "text", fieldError("chapterName"))}
+      ${settingInput("schoolName", "School", "text", fieldError("schoolName"))}
+      ${settingInput("term", "Term / semester", "text", fieldError("term"))}
+      ${settingInput("academicYear", "Academic year", "text", fieldError("academicYear"))}
       ${settingInput("defaultDuesAmount", "Default dues amount", "number")}
       ${settingInput("duesDueDates", "Dues due dates")}
       <label>Current role<input value="${safe(cloud.profile?.role || state.settings.currentRole)}" disabled /></label>
@@ -818,8 +852,8 @@ function renderAdminUserManagement() {
   </section>`;
 }
 
-function settingInput(key, label, type = "text") {
-  return `<label>${label}<input id="set_${key}" type="${type}" value="${safe(state.settings[key])}" /></label>`;
+function settingInput(key, label, type = "text", help = "") {
+  return `<label>${label}<input id="set_${key}" type="${type}" value="${safe(state.settings[key])}" />${help}</label>`;
 }
 
 function listSetting(key, label) {
@@ -856,8 +890,7 @@ function bindViewActions(root) {
     updateUserAccess(action, userId, role);
   }));
   root.querySelector("[data-refresh-users]")?.addEventListener("click", async () => { await loadProfilesForAdmin(); render(); toast("Users refreshed."); });
-  const saveSettings = root.querySelector("[data-save-settings]");
-  if (saveSettings) saveSettings.addEventListener("click", saveSettingsForm);
+  root.querySelectorAll("[data-save-settings]").forEach((saveSettings) => saveSettings.addEventListener("click", saveSettingsForm));
   const search = root.querySelector("#searchInput");
   if (search) search.addEventListener("input", () => { const key = activeView === "recruitment" ? "pnms" : activeView; activeFilters[key] = { ...(activeFilters[key] || {}), q: search.value }; render(); });
   const checkType = root.querySelector("#checkType");
@@ -876,12 +909,13 @@ async function updateUserAccess(action, userId, role) {
   if (profileError) return toast(profileError.message);
   if (status === "approved") {
     const organizationId = await ensureCloudWorkspace();
+    const dbRole = toDbRole(role);
     const { data: existing } = await cloud.client.from("organization_members").select("id").eq("user_id", userId).maybeSingle();
     if (existing?.id) {
-      const { error } = await cloud.client.from("organization_members").update({ role, email: target.email }).eq("id", existing.id);
+      const { error } = await cloud.client.from("organization_members").update({ role: dbRole, email: target.email }).eq("id", existing.id);
       if (error) return toast(error.message);
     } else {
-      const { error } = await cloud.client.from("organization_members").insert({ organization_id: organizationId, user_id: userId, email: target.email, role });
+      const { error } = await cloud.client.from("organization_members").insert({ organization_id: organizationId, user_id: userId, email: target.email, role: dbRole });
       if (error) return toast(error.message);
     }
   }
@@ -1160,18 +1194,99 @@ function recalcMemberDues() {
   });
 }
 
-function saveSettingsForm() {
-  snapshot("Settings updated", { type: "settings" });
+function collectSettingsFromForm() {
+  const next = { ...state.settings };
   ["chapterName", "schoolName", "term", "academicYear", "defaultDuesAmount", "duesDueDates", "attendanceThreshold", "privacyNotice"].forEach((k) => {
     const el = document.getElementById(`set_${k}`);
-    if (el) state.settings[k] = el.value;
+    if (el) next[k] = el.value;
   });
   ["officerRoles", "memberStatuses", "eventTypes", "committees", "permissionRoles"].forEach((k) => {
     const el = document.getElementById(`set_${k}`);
-    if (el) state.settings[k] = el.value.split(",").map((x) => x.trim()).filter(Boolean);
+    if (el) next[k] = el.value.split(",").map((x) => x.trim()).filter(Boolean);
   });
-  state.settings.setupComplete = Boolean(state.settings.term && state.settings.academicYear);
-  save(); render(); toast("Setup saved.");
+  next.setupComplete = Boolean(next.chapterName && next.schoolName && next.term && next.academicYear);
+  return next;
+}
+
+function validateSetupSettings(settings) {
+  const fieldErrors = {};
+  if (!String(settings.chapterName || "").trim()) fieldErrors.chapterName = "Chapter name is required.";
+  if (!String(settings.schoolName || "").trim()) fieldErrors.schoolName = "School is required.";
+  if (!String(settings.term || "").trim()) fieldErrors.term = "Term / semester is required.";
+  if (!String(settings.academicYear || "").trim()) fieldErrors.academicYear = "Academic year is required.";
+  return fieldErrors;
+}
+
+async function saveSettingsForm() {
+  if (setupSave.saving) return;
+  const nextSettings = collectSettingsFromForm();
+  const fieldErrors = validateSetupSettings(nextSettings);
+  state.settings = nextSettings;
+  setupSave = { saving: false, error: "", success: "", fieldErrors };
+  if (Object.keys(fieldErrors).length) {
+    render();
+    toast("Please finish the required setup fields.");
+    return;
+  }
+  if (!cloud.client) {
+    setupSave.error = "Supabase is not configured for this deployment.";
+    render();
+    return;
+  }
+  const { data: sessionData, error: sessionError } = await cloud.client.auth.getSession();
+  if (sessionError) {
+    logSupabaseError("session check failed", sessionError);
+    setupSave.error = formatSupabaseError(sessionError, "We could not confirm your sign-in session.");
+    render();
+    return;
+  }
+  cloud.user = sessionData.session?.user || cloud.user;
+  if (!cloud.user?.id) {
+    setupSave.error = "You must be signed in to finish setup.";
+    render();
+    return;
+  }
+
+  snapshot("Settings updated", { type: "settings" });
+  setupSave = { saving: true, error: "", success: "", fieldErrors: {} };
+  render();
+  setupDebug("submitting", {
+    hasSession: Boolean(sessionData.session),
+    userId: cloud.user.id,
+    email: cloud.user.email,
+    submittedSettings: {
+      chapterName: nextSettings.chapterName,
+      schoolName: nextSettings.schoolName,
+      term: nextSettings.term,
+      academicYear: nextSettings.academicYear
+    }
+  });
+
+  try {
+    const workspacePayload = normalize({ ...state, settings: nextSettings });
+    const { data, error } = await cloud.client.rpc("save_chapter_setup", {
+      p_setup: nextSettings,
+      p_workspace: workspacePayload
+    });
+    if (error) throw error;
+    const result = Array.isArray(data) ? data[0] : data;
+    if (!result?.organization_id) throw new Error("Setup saved without a returned organization id.");
+    cloud.organizationId = result.organization_id;
+    localStorage.setItem(orgStoreKey, cloud.organizationId);
+    setupDebug("database response", { organizationId: cloud.organizationId, hasWorkspaceData: Boolean(result.workspace_data) });
+    await ensureOwnProfile();
+    if (cloud.profile?.approval_status === "approved") state.settings.currentRole = cloud.profile.role || "Admin";
+    await loadCloudWorkspace({ throwOnError: true });
+    setupSave = { saving: false, error: "", success: "Your chapter setup was saved to Supabase and reloaded from the database.", fieldErrors: {} };
+    save();
+    render();
+    toast("Chapter setup saved successfully.");
+  } catch (err) {
+    logSupabaseError("setup save failed", err);
+    setupSave = { saving: false, error: formatSupabaseError(err, "Setup could not be saved. No information was changed."), success: "", fieldErrors: {} };
+    render();
+    toast("Setup could not be saved.");
+  }
 }
 
 function openLeadershipForm(id) {

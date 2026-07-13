@@ -135,6 +135,13 @@ label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; font-weig
 .report-block, .profile-card, .notice {
   border: 1px solid var(--line); border-radius: 18px; padding: 16px; background: #f8fbff;
 }
+.error-notice { border-color: #fecaca; background: #fff7f7; color: #7f1d1d; margin-bottom: 16px; }
+.success-notice { border-color: #bbf7d0; background: #f0fdf4; color: #14532d; margin-bottom: 16px; }
+.field-error { color: #b91c1c; margin: 0; font-size: 12px; font-weight: 800; }
+button:disabled {
+  opacity: 0.62;
+  cursor: wait;
+}
 .report-block h4 { margin: 0 0 10px; }
 .report-block ul { margin: 0; padding-left: 18px; color: var(--muted); line-height: 1.7; }
 .profile-card p { color: var(--muted); line-height: 1.5; }
