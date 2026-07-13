@@ -25,6 +25,8 @@ https://chapterops-lite.vercel.app/
 ## Privacy and security
 
 - Create an account or sign in with email/password before entering real chapter data.
+- Personal emails are allowed, including Gmail, iCloud, Outlook, Yahoo, and Kansas State addresses.
+- New account requests are pending until an Admin approves the user and assigns a role.
 - Password reset is handled through Supabase Auth.
 - Supabase Auth and RLS protect the cloud workspace.
 - The browser app uses only a publishable Supabase key. Do not add a service-role key to frontend code.

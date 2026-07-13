@@ -44,7 +44,7 @@ const defaults = {
 let activeView = "dashboard";
 let activeFilters = {};
 let historyStack = [];
-let cloud = { client: null, user: null, organizationId: localStorage.getItem(orgStoreKey) };
+let cloud = { client: null, user: null, profile: null, profiles: [], organizationId: localStorage.getItem(orgStoreKey) };
 let state = load();
 
 const can = (permission) => roleRules[state.settings.currentRole]?.includes("all") || roleRules[state.settings.currentRole]?.includes(permission);
@@ -144,12 +144,13 @@ async function initCloud() {
   cloud.user = data.session?.user || null;
   cloud.client.auth.onAuthStateChange(async (event, session) => {
     cloud.user = session?.user || null;
+    cloud.profile = null;
     updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required for real cloud data");
     if (event === "PASSWORD_RECOVERY") openNewPasswordModal();
-    if (cloud.user) await loadCloudWorkspace();
+    if (cloud.user) await bootstrapUser();
     render();
   });
-  if (cloud.user) await loadCloudWorkspace();
+  if (cloud.user) await bootstrapUser();
   updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required for real cloud data");
 }
 
@@ -172,21 +173,25 @@ async function signInWithPassword(email, password) {
   toast("Signed in.");
 }
 
-async function createAccount(email, password, confirmPassword, fullName) {
+async function createAccount(email, password, confirmPassword, fullName, requestedRole = "Active Member", requestNotes = "") {
   if (!cloud.client) return toast("Supabase is not configured.");
   if (password.length < 8) return toast("Password must be at least 8 characters.");
   if (password !== confirmPassword) return toast("Passwords do not match.");
-  const { error } = await cloud.client.auth.signUp({
+  const { data, error } = await cloud.client.auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: window.location.origin,
-      data: { full_name: fullName || "" }
+      data: { full_name: fullName || "", requested_role: requestedRole, request_notes: requestNotes }
     }
   });
   if (error) return toast(error.message);
+  if (data?.session?.user) {
+    cloud.user = data.session.user;
+    await ensureOwnProfile({ fullName, requestedRole, requestNotes });
+  }
   closeModal();
-  toast("Account created. Check your email if confirmation is required.");
+  toast("Request submitted. An admin must approve your account before you can access chapter data.");
 }
 
 async function sendPasswordReset(email) {
@@ -213,8 +218,57 @@ async function signOut() {
   render();
 }
 
+async function bootstrapUser() {
+  await ensureOwnProfile();
+  if (cloud.profile?.approval_status === "approved") {
+    state.settings.currentRole = cloud.profile.role || "Active Member";
+    await loadCloudWorkspace();
+    if (can("all")) await loadProfilesForAdmin();
+  }
+}
+
+async function ensureOwnProfile(input = {}) {
+  if (!cloud.client || !cloud.user) return null;
+  const { data: existing, error: selectError } = await cloud.client.from("profiles").select("*").eq("id", cloud.user.id).maybeSingle();
+  if (selectError && selectError.code !== "PGRST116") throw selectError;
+  if (!existing) {
+    const meta = cloud.user.user_metadata || {};
+    const profile = {
+      id: cloud.user.id,
+      email: cloud.user.email,
+      full_name: input.fullName || meta.full_name || "",
+      requested_role: input.requestedRole || meta.requested_role || "Active Member",
+      role: "Active Member",
+      approval_status: "pending",
+      request_notes: input.requestNotes || meta.request_notes || ""
+    };
+    const { error: insertError } = await cloud.client.from("profiles").insert(profile);
+    if (insertError) throw insertError;
+    cloud.profile = profile;
+  } else {
+    cloud.profile = existing;
+  }
+  const { data: membership } = await cloud.client.from("organization_members").select("organization_id, role").eq("user_id", cloud.user.id).limit(1).maybeSingle();
+  if (membership?.role === "Admin" && cloud.profile.approval_status !== "approved") {
+    const { data: updated, error: updateError } = await cloud.client.from("profiles").update({ approval_status: "approved", role: "Admin", updated_at: new Date().toISOString() }).eq("id", cloud.user.id).select("*").single();
+    if (!updateError && updated) cloud.profile = updated;
+  }
+  if (membership?.organization_id) {
+    cloud.organizationId = membership.organization_id;
+    localStorage.setItem(orgStoreKey, membership.organization_id);
+  }
+  return cloud.profile;
+}
+
+async function loadProfilesForAdmin() {
+  if (!cloud.client || !can("all")) return;
+  const { data, error } = await cloud.client.from("profiles").select("*").order("created_at", { ascending: false });
+  if (!error) cloud.profiles = data || [];
+}
+
 async function ensureCloudWorkspace() {
   if (!cloud.client || !cloud.user) throw new Error("Sign in before syncing real chapter data.");
+  if (cloud.profile?.approval_status !== "approved") throw new Error("Your account is pending admin approval.");
   if (cloud.organizationId) return cloud.organizationId;
   const { data: existing } = await cloud.client.from("organization_members").select("organization_id").eq("user_id", cloud.user.id).limit(1).maybeSingle();
   if (existing?.organization_id) {
@@ -222,7 +276,8 @@ async function ensureCloudWorkspace() {
     localStorage.setItem(orgStoreKey, cloud.organizationId);
     return cloud.organizationId;
   }
-  const { data: org, error: orgError } = await cloud.client.from("organizations").insert({ name: state.settings.chapterName }).select("id").single();
+  if (cloud.profile?.role !== "Admin") throw new Error("Your account is approved but not assigned to a chapter workspace yet.");
+  const { data: org, error: orgError } = await cloud.client.from("organizations").insert({ name: state.settings.chapterName, created_by: cloud.user.id }).select("id").single();
   if (orgError) throw orgError;
   const { error: memberError } = await cloud.client.from("organization_members").insert({ organization_id: org.id, user_id: cloud.user.id, role: "Admin" });
   if (memberError) throw memberError;
@@ -234,9 +289,9 @@ async function ensureCloudWorkspace() {
 async function loadCloudWorkspace() {
   try {
     const organizationId = await ensureCloudWorkspace();
-    const { data, error } = await cloud.client.from("workspace_state").select("state").eq("organization_id", organizationId).maybeSingle();
+    const { data, error } = await cloud.client.from("workspace_state").select("*").eq("organization_id", organizationId).maybeSingle();
     if (error) throw error;
-    if (data?.state) state = normalize(data.state);
+    if (data?.data || data?.state) state = normalize(data.data || data.state);
     else await syncCloudWorkspace(false);
     save();
   } catch (err) {
@@ -247,7 +302,7 @@ async function loadCloudWorkspace() {
 async function syncCloudWorkspace(showToast = true) {
   try {
     const organizationId = await ensureCloudWorkspace();
-    const { error } = await cloud.client.from("workspace_state").upsert({ organization_id: organizationId, state, updated_by: cloud.user.id, updated_at: new Date().toISOString() }, { onConflict: "organization_id" });
+    const { error } = await cloud.client.from("workspace_state").upsert({ organization_id: organizationId, data: state, updated_by: cloud.user.id, updated_at: new Date().toISOString() }, { onConflict: "organization_id" });
     if (error) throw error;
     if (showToast) toast("Cloud workspace synced.");
   } catch (err) {
@@ -389,6 +444,11 @@ function render() {
     bindAuthActions(root);
     return;
   }
+  if (cloud.client && cloud.user && cloud.profile?.approval_status !== "approved") {
+    root.innerHTML = renderApprovalGate();
+    bindAuthActions(root);
+    return;
+  }
   root.innerHTML = ({
     dashboard: renderDashboard,
     members: () => renderCollection("members"),
@@ -411,12 +471,12 @@ function renderLoginGate() {
       <h3>Sign in to Alpha Omega Chapter Operations</h3>
       <p class="muted">Use your email and password. Supabase handles password storage and sessions securely.</p>
       <form id="loginForm" class="auth-form">
-        <label>Email<input name="email" type="email" autocomplete="email" required /></label>
+        <label>Email address<input name="email" type="email" autocomplete="email" placeholder="name@email.com" required /></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
         <button class="primary" type="submit">Sign in</button>
       </form>
       <div class="button-row">
-        <button class="ghost" data-auth-mode="signup">Create account</button>
+        <button class="ghost" data-auth-mode="signup">Request access</button>
         <button class="ghost" data-auth-mode="reset">Forgot password</button>
       </div>
     </div>
@@ -429,12 +489,36 @@ function renderLoginGate() {
     </div>
     <div class="hero-actions">
       <button class="primary" data-auth-mode="signin">Sign in</button>
-      <button class="ghost" data-auth-mode="signup">Create account</button>
+      <button class="ghost" data-auth-mode="signup">Request access</button>
     </div>
   </section>
   <section class="panel">
     <div class="panel-head"><h3>Ready for real setup</h3><span class="pill">Kansas State · Alpha Omega PIKE</span></div>
     <p class="muted">After login, complete setup and start entering or importing the real roster and dues records with the Treasurer.</p>
+  </section>`;
+}
+
+function renderApprovalGate() {
+  const status = cloud.profile?.approval_status || "pending";
+  const title = status === "rejected" ? "Access request rejected" : status === "disabled" ? "Account disabled" : "Account pending approval";
+  const body = status === "pending"
+    ? "Your request was submitted. An Admin must approve your account and assign a role before you can access private chapter data."
+    : status === "disabled"
+      ? "This account has been disabled. Contact an Admin if this is unexpected."
+      : "This account is not approved for ChapterOps access. Contact an Admin if this is unexpected.";
+  return `<section class="auth-shell">
+    <div class="auth-card">
+      <p class="eyebrow">Request access</p>
+      <h3>${title}</h3>
+      <p class="muted">${body}</p>
+      <div class="profile-grid">
+        <div><span>Email</span><strong>${safe(cloud.profile?.email || cloud.user.email)}</strong></div>
+        <div><span>Requested role</span><strong>${safe(cloud.profile?.requested_role || "Active Member")}</strong></div>
+        <div><span>Status</span><strong>${safe(status)}</strong></div>
+        <div><span>Requested</span><strong>${safe(cloud.profile?.created_at ? new Date(cloud.profile.created_at).toLocaleString() : "")}</strong></div>
+      </div>
+      <div class="button-row"><button class="ghost" id="pendingSignOut">Sign out</button></div>
+    </div>
   </section>`;
 }
 
@@ -691,7 +775,7 @@ function renderSettings() {
       ${settingInput("academicYear", "Academic year")}
       ${settingInput("defaultDuesAmount", "Default dues amount", "number")}
       ${settingInput("duesDueDates", "Dues due dates")}
-      <label>Current role<select id="set_currentRole">${permissionRoles.map((r) => `<option ${state.settings.currentRole === r ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+      <label>Current role<input value="${safe(cloud.profile?.role || state.settings.currentRole)}" disabled /></label>
       <label>Attendance threshold<input id="set_attendanceThreshold" type="number" min="0" max="100" value="${safe(state.settings.attendanceThreshold)}" /></label>
       ${listSetting("officerRoles", "Officer roles")}
       ${listSetting("memberStatuses", "Member statuses")}
@@ -705,6 +789,32 @@ function renderSettings() {
       <div class="notice"><h4>Financial access</h4><p>Finance pages are restricted to Admin, Treasurer, Assistant Treasurer, and President roles unless permissions are expanded later.</p></div>
       <div class="notice"><h4>Empty workspace</h4><p>No sample members, dues, PNMs, or events are seeded. Use Add or Import to enter Alpha Omega’s real records.</p></div>
     </div>
+  </section>
+  ${can("all") ? renderAdminUserManagement() : ""}`;
+}
+
+function renderAdminUserManagement() {
+  const rows = cloud.profiles || [];
+  return `<section class="panel">
+    <div class="panel-head">
+      <div><p class="eyebrow">Admin only</p><h3>User approvals and roles</h3></div>
+      <button class="ghost" data-refresh-users>Refresh users</button>
+    </div>
+    <p class="muted">Personal emails are allowed. New accounts stay pending until an Admin approves them and assigns a role.</p>
+    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Requested role</th><th>Assigned role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody>${rows.map((p) => `<tr>
+      <td data-label="Name">${safe(p.full_name || "")}</td>
+      <td data-label="Email">${safe(p.email)}</td>
+      <td data-label="Requested role">${safe(p.requested_role)}</td>
+      <td data-label="Assigned role"><select data-user-role="${p.id}">${permissionRoles.map((r) => `<option ${p.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td>
+      <td data-label="Status"><span class="pill">${safe(p.approval_status)}</span></td>
+      <td data-label="Joined">${safe(p.created_at ? new Date(p.created_at).toLocaleDateString() : "")}</td>
+      <td data-label="Actions"><div class="row-actions">
+        <button class="small ghost" data-user-action="approve:${p.id}">Approve</button>
+        <button class="small ghost" data-user-action="reject:${p.id}">Reject</button>
+        <button class="small ghost" data-user-action="disable:${p.id}">Disable</button>
+        <button class="small ghost" data-user-action="role:${p.id}">Save role</button>
+      </div></td>
+    </tr>`).join("")}</tbody></table></div>` : `<div class="empty-state"><h3>No access requests yet.</h3><p>When your Treasurer or another officer creates an account with a personal email, they will appear here for approval.</p></div>`}
   </section>`;
 }
 
@@ -740,6 +850,12 @@ function bindViewActions(root) {
   root.querySelectorAll("[data-task-done]").forEach((el) => el.addEventListener("click", () => markTaskDone(el.dataset.taskDone)));
   root.querySelectorAll("[data-add-leadership]").forEach((el) => el.addEventListener("click", () => openLeadershipForm()));
   root.querySelectorAll("[data-edit-leadership]").forEach((el) => el.addEventListener("click", () => openLeadershipForm(el.dataset.editLeadership)));
+  root.querySelectorAll("[data-user-action]").forEach((el) => el.addEventListener("click", () => {
+    const [action, userId] = el.dataset.userAction.split(":");
+    const role = root.querySelector(`[data-user-role="${userId}"]`)?.value;
+    updateUserAccess(action, userId, role);
+  }));
+  root.querySelector("[data-refresh-users]")?.addEventListener("click", async () => { await loadProfilesForAdmin(); render(); toast("Users refreshed."); });
   const saveSettings = root.querySelector("[data-save-settings]");
   if (saveSettings) saveSettings.addEventListener("click", saveSettingsForm);
   const search = root.querySelector("#searchInput");
@@ -750,8 +866,33 @@ function bindViewActions(root) {
   if (record) record.addEventListener("click", recordCheckin);
 }
 
+async function updateUserAccess(action, userId, role) {
+  if (!cloud.client || !can("all")) return toast("Admin access required.");
+  const target = cloud.profiles.find((p) => p.id === userId);
+  if (!target) return toast("User not found.");
+  const status = action === "approve" || action === "role" ? "approved" : action === "reject" ? "rejected" : "disabled";
+  if (action !== "role" && !confirm(`${labelize(action)} ${target.email}?`)) return;
+  const { error: profileError } = await cloud.client.from("profiles").update({ approval_status: status, role, updated_at: new Date().toISOString() }).eq("id", userId);
+  if (profileError) return toast(profileError.message);
+  if (status === "approved") {
+    const organizationId = await ensureCloudWorkspace();
+    const { data: existing } = await cloud.client.from("organization_members").select("id").eq("user_id", userId).maybeSingle();
+    if (existing?.id) {
+      const { error } = await cloud.client.from("organization_members").update({ role, email: target.email }).eq("id", existing.id);
+      if (error) return toast(error.message);
+    } else {
+      const { error } = await cloud.client.from("organization_members").insert({ organization_id: organizationId, user_id: userId, email: target.email, role });
+      if (error) return toast(error.message);
+    }
+  }
+  await loadProfilesForAdmin();
+  render();
+  toast("User access updated.");
+}
+
 function bindAuthActions(root = document) {
   root.querySelectorAll("[data-auth-mode]").forEach((el) => el.addEventListener("click", () => openAuthModal(el.dataset.authMode)));
+  root.querySelector("#pendingSignOut")?.addEventListener("click", signOut);
   root.querySelector("#loginForm")?.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const form = Object.fromEntries(new FormData(ev.currentTarget).entries());
@@ -764,17 +905,18 @@ function openAuthModal(mode = "signin") {
   const isSignup = mode === "signup";
   const isReset = mode === "reset";
   openModal(`<section class="auth-modal">
-    <p class="eyebrow">${isSignup ? "Create account" : isReset ? "Password reset" : "Sign in"}</p>
-    <h3>${isSignup ? "Create your ChapterOps account" : isReset ? "Reset your password" : "Sign in to ChapterOps"}</h3>
+    <p class="eyebrow">${isSignup ? "Request access" : isReset ? "Password reset" : "Sign in"}</p>
+    <h3>${isSignup ? "Request a ChapterOps account" : isReset ? "Reset your password" : "Sign in to ChapterOps"}</h3>
     <p class="muted">${isSignup ? "Use an email and password. If email confirmation is enabled, Supabase will send a confirmation email." : isReset ? "Enter your email and Supabase will send a secure reset link." : "Enter the email and password for your ChapterOps account."}</p>
     <form id="authModalForm" class="form-grid">
       ${isSignup ? `<label class="wide">Full name<input name="fullName" autocomplete="name" /></label>` : ""}
-      <label class="wide">Email<input name="email" type="email" autocomplete="email" required /></label>
+      <label class="wide">Email address<input name="email" type="email" autocomplete="email" placeholder="name@email.com" required /></label>
       ${!isReset ? `<label class="wide">Password<input name="password" type="password" autocomplete="${isSignup ? "new-password" : "current-password"}" minlength="8" required /></label>` : ""}
       ${isSignup ? `<label class="wide">Confirm password<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required /></label>` : ""}
+      ${isSignup ? `<label>Requested role<select name="requestedRole">${permissionRoles.filter((r) => r !== "Admin").map((r) => `<option>${r}</option>`).join("")}</select></label><label class="wide">Reason / notes optional<textarea name="requestNotes" placeholder="Example: Treasurer account for dues management"></textarea></label>` : ""}
       <div class="wide button-row">
-        <button class="primary" type="submit">${isSignup ? "Create account" : isReset ? "Send reset email" : "Sign in"}</button>
-        ${!isSignup ? `<button class="ghost" type="button" data-auth-mode="signup">Create account</button>` : `<button class="ghost" type="button" data-auth-mode="signin">I already have an account</button>`}
+        <button class="primary" type="submit">${isSignup ? "Submit request" : isReset ? "Send reset email" : "Sign in"}</button>
+        ${!isSignup ? `<button class="ghost" type="button" data-auth-mode="signup">Request access</button>` : `<button class="ghost" type="button" data-auth-mode="signin">I already have an account</button>`}
         ${!isReset ? `<button class="ghost" type="button" data-auth-mode="reset">Forgot password</button>` : `<button class="ghost" type="button" data-auth-mode="signin">Back to sign in</button>`}
         <button class="ghost" type="button" data-close-modal>Cancel</button>
       </div>
@@ -784,7 +926,7 @@ function openAuthModal(mode = "signin") {
   document.getElementById("authModalForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const form = Object.fromEntries(new FormData(ev.currentTarget).entries());
-    if (isSignup) await createAccount(form.email, form.password, form.confirmPassword, form.fullName);
+    if (isSignup) await createAccount(form.email, form.password, form.confirmPassword, form.fullName, form.requestedRole, form.requestNotes);
     else if (isReset) await sendPasswordReset(form.email);
     else await signInWithPassword(form.email, form.password);
   });
@@ -1020,7 +1162,7 @@ function recalcMemberDues() {
 
 function saveSettingsForm() {
   snapshot("Settings updated", { type: "settings" });
-  ["chapterName", "schoolName", "term", "academicYear", "defaultDuesAmount", "duesDueDates", "attendanceThreshold", "privacyNotice", "currentRole"].forEach((k) => {
+  ["chapterName", "schoolName", "term", "academicYear", "defaultDuesAmount", "duesDueDates", "attendanceThreshold", "privacyNotice"].forEach((k) => {
     const el = document.getElementById(`set_${k}`);
     if (el) state.settings[k] = el.value;
   });
