@@ -39,6 +39,7 @@ const defaults = {
   memberStatuses: ["Active", "New Member", "Inactive", "Alumni", "Archived"],
   eventTypes: ["Chapter", "Brotherhood", "Recruitment", "Philanthropy", "Social", "New member education", "Executive meeting", "Committee meeting", "Risk management", "Alumni", "Other"],
   committees: ["Executive", "Recruitment", "Brotherhood", "Philanthropy", "Risk Management", "Social", "Finance", "Alumni Relations", "Operations"],
+  executiveOfficerRoles: ["President", "Internal Vice President", "External Vice President", "Treasurer", "Secretary", "Sergeant at Arms"],
   paymentStatuses: ["Not billed", "Unpaid", "Partially paid", "Paid", "Past due", "Payment plan", "Waived", "Archived"]
 };
 
@@ -91,6 +92,7 @@ function emptyWorkspace() {
       attendanceThreshold: 80,
       currentRole: "Admin",
       officerRoles: [...defaults.officerRoles],
+      executiveOfficerRoles: [...defaults.executiveOfficerRoles],
       memberStatuses: [...defaults.memberStatuses],
       eventTypes: [...defaults.eventTypes],
       committees: [...defaults.committees],
@@ -389,6 +391,75 @@ function metrics() {
     bidsAccepted,
     acceptanceRate: pct(bidsAccepted, bidsExtended)
   };
+}
+
+function normalizeTitle(title = "") {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/^tpe[_\s-]*/i, "")
+    .replace(/chairman/g, "chair")
+    .replace(/vp of membership development/g, "recruitment chair / vpmd")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function isExecutiveRole(role = "", assignment = {}) {
+  if (assignment.is_executive === true || assignment.isExecutive === true || assignment.executive_board === true || assignment.executiveBoard === true) return true;
+  if (["executive", "executive board", "exec", "exec board"].includes(normalizeTitle(assignment.officer_type || assignment.officerType || assignment.position_category || assignment.positionCategory || assignment.role_category || assignment.roleCategory))) return true;
+  const executiveRoles = state.settings.executiveOfficerRoles || defaults.executiveOfficerRoles;
+  const roleKey = normalizeTitle(role);
+  return executiveRoles.map(normalizeTitle).includes(roleKey);
+}
+
+function addOfficerRole(group, item) {
+  const title = String(item.role || "").trim();
+  if (!title) return;
+  if (!group.roleKeys.has(normalizeTitle(title))) {
+    group.roles.push(title);
+    group.roleKeys.add(normalizeTitle(title));
+  }
+  if (item.committee && !group.committees.includes(item.committee)) group.committees.push(item.committee);
+  if (item.responsibilities && !group.responsibilities.includes(item.responsibilities)) group.responsibilities.push(item.responsibilities);
+  if (item.id && !group.assignmentIds.includes(item.id)) group.assignmentIds.push(item.id);
+  group.hasExecutiveRole = group.hasExecutiveRole || isExecutiveRole(title, item);
+}
+
+function buildOfficerDirectory() {
+  const byMember = new Map();
+  const ensureGroup = (memberId) => {
+    const member = state.members.find((m) => m.id === memberId);
+    if (!member || member.archived || member.lifecycle === "Archived") return null;
+    if (!byMember.has(memberId)) {
+      byMember.set(memberId, {
+        memberId,
+        member,
+        roles: [],
+        roleKeys: new Set(),
+        committees: [],
+        responsibilities: [],
+        assignmentIds: [],
+        hasExecutiveRole: false
+      });
+    }
+    return byMember.get(memberId);
+  };
+
+  state.leadership.filter((l) => !l.archived).forEach((assignment) => {
+    const memberId = assignment.assignedMember || assignment.member_id || assignment.memberId || assignment.user_id || assignment.userId || assignment.profile_id || assignment.profileId;
+    const group = ensureGroup(memberId);
+    if (group) addOfficerRole(group, assignment);
+  });
+
+  state.members.filter((m) => !m.archived && m.lifecycle !== "Archived" && m.officerRole).forEach((member) => {
+    const group = ensureGroup(member.id);
+    if (group) addOfficerRole(group, { id: `member-role:${member.id}:${member.officerRole}`, assignedMember: member.id, role: member.officerRole, committee: member.committee });
+  });
+
+  const groups = [...byMember.values()].map((group) => ({ ...group, roleKeys: undefined }));
+  const executiveOfficers = groups.filter((group) => group.hasExecutiveRole).sort((a, b) => memberName(a.memberId).localeCompare(memberName(b.memberId)));
+  const executiveMemberIds = new Set(executiveOfficers.map((group) => group.memberId));
+  const otherOfficers = groups.filter((group) => !executiveMemberIds.has(group.memberId)).sort((a, b) => memberName(a.memberId).localeCompare(memberName(b.memberId)));
+  return { executiveOfficers, otherOfficers, allOfficers: groups };
 }
 
 const collectionMeta = {
@@ -761,15 +832,53 @@ function renderCheckinPanel() {
 }
 
 function renderLeadership() {
-  const hasRows = state.leadership.length;
+  const directory = buildOfficerDirectory();
+  const hasRows = directory.allOfficers.length;
   return `<section class="panel">
     <div class="panel-head"><div><p class="eyebrow">Officers and committees</p><h3>Leadership assignments</h3></div><button class="primary" data-add-leadership>Add officer / committee role</button></div>
-    ${hasRows ? `<div class="card-grid">${state.leadership.map((l) => `<article class="profile-card"><p class="eyebrow">${safe(l.committee)}</p><h3>${safe(l.role)}</h3><p><strong>${safe(memberName(l.assignedMember) || "Unassigned")}</strong></p><p>${safe(l.responsibilities)}</p><div class="button-row"><button class="ghost small" data-edit-leadership="${l.id}">Edit</button></div></article>`).join("")}</div>` : `<div class="empty-state"><h3>No officer roles assigned yet.</h3><p>Add the Treasurer, President, Assistant Treasurer, and other roles once the real roster is entered.</p><button class="primary" data-add-leadership>Add first role</button></div>`}
+    ${hasRows ? `
+      ${renderOfficerSection("Executive Officers", directory.executiveOfficers, "Executive positions are controlled in Settings. Each executive member appears once here.")}
+      ${renderOfficerSection("Other Chapter Officers", directory.otherOfficers, "Non-executive officers appear here unless they are already listed as executive officers.")}
+      ${renderLeadershipRoster()}
+    ` : `<div class="empty-state"><h3>No officer roles assigned yet.</h3><p>Add the Treasurer, President, Assistant Treasurer, and other roles once the real roster is entered.</p><button class="primary" data-add-leadership>Add first role</button></div>`}
+  </section>`;
+}
+
+function renderOfficerSection(title, officers, emptyText) {
+  if (!officers.length) return "";
+  return `<section class="leadership-section">
+    <div class="section-head"><h4>${safe(title)}</h4><p>${safe(emptyText)}</p></div>
+    <div class="card-grid">${officers.map(renderOfficerCard).join("")}</div>
+  </section>`;
+}
+
+function renderOfficerCard(officer) {
+  return `<article class="profile-card" data-open="members" data-id="${safe(officer.memberId)}">
+    <p class="eyebrow">${safe(officer.committees.join(" · ") || "Chapter leadership")}</p>
+    <h3>${safe(memberName(officer.memberId) || "Unassigned")}</h3>
+    <p><strong>${safe(officer.roles.join(", "))}</strong></p>
+    ${officer.responsibilities.length ? `<p>${safe(officer.responsibilities[0])}</p>` : ""}
+    <div class="button-row">
+      <button class="ghost small" data-open="members" data-id="${safe(officer.memberId)}">Open profile</button>
+      ${officer.assignmentIds.find((id) => !String(id).startsWith("member-role:")) ? `<button class="ghost small" data-edit-leadership="${safe(officer.assignmentIds.find((id) => !String(id).startsWith("member-role:")))}">Edit assignment</button>` : ""}
+    </div>
+  </article>`;
+}
+
+function renderLeadershipRoster() {
+  const members = activeMembers();
+  if (!members.length) return "";
+  return `<section class="leadership-section">
+    <div class="section-head"><h4>All Members</h4><p>Officers remain in the normal chapter roster. Holding a position does not remove anyone from the member list.</p></div>
+    <div class="table-wrap"><table><thead><tr><th>Name</th><th>Officer role</th><th>Committee</th><th>Status</th></tr></thead><tbody>
+      ${members.map((m) => `<tr data-open="members" data-id="${safe(m.id)}"><td data-label="Name"><button class="linklike">${safe(memberName(m.id))}</button></td><td data-label="Officer role">${safe(m.officerRole || "—")}</td><td data-label="Committee">${safe(m.committee || "—")}</td><td data-label="Status">${safe(m.memberStatus || m.lifecycle || "Active")}</td></tr>`).join("")}
+    </tbody></table></div>
   </section>`;
 }
 
 function renderReports() {
   const m = metrics();
+  const officerDirectory = buildOfficerDirectory();
   const reportsEmpty = !state.members.length && !state.finance.length && !state.events.length && !state.tasks.length;
   return `<section class="panel printable">
     <div class="panel-head"><div><p class="eyebrow">Reports</p><h3>Executive and Treasurer reports</h3></div><div class="button-row"><button class="ghost" data-export="reports">Export summary CSV</button><button class="primary" data-print>PDF / Print</button></div></div>
@@ -780,9 +889,13 @@ function renderReports() {
       ${mini("Outstanding balances", money(m.outstanding))}
       ${mini("Payment history", state.finance.filter((f) => f.type === "Payment").length)}
       ${mini("Attendance records", state.attendance.length)}
+      ${mini("Executive officers", officerDirectory.executiveOfficers.length)}
+      ${mini("Other officers", officerDirectory.otherOfficers.length)}
       ${mini("Open officer tasks", m.tasks)}
     </div>
     <div class="two-col">
+      ${reportBlock("Executive officers", officerDirectory.executiveOfficers.map((o) => `${memberName(o.memberId)}: ${o.roles.join(", ")}`))}
+      ${reportBlock("Other chapter officers", officerDirectory.otherOfficers.map((o) => `${memberName(o.memberId)}: ${o.roles.join(", ")}`))}
       ${reportBlock("Outstanding balances", activeMembers().map((m) => ({ name: memberName(m.id), ...memberFinance(m.id) })).filter((x) => x.balance > 0).map((x) => `${x.name}: ${money(x.balance)} · ${x.status}`))}
       ${reportBlock("Payment history", financeRows().filter((f) => f.type === "Payment").slice(0, 25).map((f) => `${memberName(f.memberId)} · ${money(f.amount)} · ${f.paymentDate || ""}`))}
       ${reportBlock("Attendance report", state.attendance.slice(0, 25).map((a) => `${eventName(a.eventId)} · ${a.personType === "Member" ? memberName(a.personId) : pnmName(a.personId)} · ${a.status}`))}
@@ -812,6 +925,7 @@ function renderSettings() {
       <label>Current role<input value="${safe(cloud.profile?.role || state.settings.currentRole)}" disabled /></label>
       <label>Attendance threshold<input id="set_attendanceThreshold" type="number" min="0" max="100" value="${safe(state.settings.attendanceThreshold)}" /></label>
       ${listSetting("officerRoles", "Officer roles")}
+      ${listSetting("executiveOfficerRoles", "Executive officer roles")}
       ${listSetting("memberStatuses", "Member statuses")}
       ${listSetting("eventTypes", "Event types")}
       ${listSetting("committees", "Committees")}
@@ -874,7 +988,7 @@ function bindViewActions(root) {
   root.querySelectorAll("[data-edit]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.edit.split(":"); openForm(key, id); }));
   root.querySelectorAll("[data-archive]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.archive.split(":"); archiveRow(key, id); }));
   root.querySelectorAll("[data-delete]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.delete.split(":"); deleteRow(key, id); }));
-  root.querySelectorAll("[data-open]").forEach((el) => el.addEventListener("click", (ev) => { if (ev.target.closest(".row-actions")) return; openProfile(el.dataset.open, el.dataset.id); }));
+  root.querySelectorAll("[data-open]").forEach((el) => el.addEventListener("click", (ev) => { if (ev.target.closest(".row-actions, [data-edit-leadership], [data-edit], [data-archive], [data-delete]")) return; openProfile(el.dataset.open, el.dataset.id); }));
   root.querySelectorAll("[data-export]").forEach((el) => el.addEventListener("click", () => exportCsv(el.dataset.export)));
   root.querySelectorAll("[data-import]").forEach((el) => el.addEventListener("click", () => beginImport(el.dataset.import)));
   root.querySelectorAll("[data-print]").forEach((el) => el.addEventListener("click", () => window.print()));
@@ -883,7 +997,7 @@ function bindViewActions(root) {
   root.querySelectorAll("[data-record-payment]").forEach((el) => el.addEventListener("click", () => openPaymentForm(el.dataset.recordPayment || "")));
   root.querySelectorAll("[data-task-done]").forEach((el) => el.addEventListener("click", () => markTaskDone(el.dataset.taskDone)));
   root.querySelectorAll("[data-add-leadership]").forEach((el) => el.addEventListener("click", () => openLeadershipForm()));
-  root.querySelectorAll("[data-edit-leadership]").forEach((el) => el.addEventListener("click", () => openLeadershipForm(el.dataset.editLeadership)));
+  root.querySelectorAll("[data-edit-leadership]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); openLeadershipForm(el.dataset.editLeadership); }));
   root.querySelectorAll("[data-user-action]").forEach((el) => el.addEventListener("click", () => {
     const [action, userId] = el.dataset.userAction.split(":");
     const role = root.querySelector(`[data-user-role="${userId}"]`)?.value;
@@ -1103,11 +1217,18 @@ function openProfile(key, id) {
   const dues = key === "members" ? memberFinance(id) : null;
   openModal(`<h3>${safe(title)}</h3>
     ${dues ? renderMemberDuesProfile(id, dues) : ""}
+    ${key === "members" ? renderMemberLeadershipProfile(id) : ""}
     <div class="profile-grid">${Object.entries(row).map(([k,v]) => `<div><span>${labelize(k)}</span><strong>${safe(Array.isArray(v) ? v.join(", ") : v)}</strong></div>`).join("")}</div>
     ${renderRelatedAttendance(key, id)}
     <div class="button-row"><button class="primary" data-edit="${key}:${id}">Edit</button>${key === "members" && can("view_finance") ? `<button class="ghost" data-record-payment="${id}">Record payment</button>` : ""}<button class="ghost" data-close-modal>Close</button></div>`);
   document.querySelector("#modal [data-edit]")?.addEventListener("click", () => { closeModal(); openForm(key, id); });
   document.querySelector("#modal [data-record-payment]")?.addEventListener("click", (ev) => { closeModal(); openPaymentForm(ev.currentTarget.dataset.recordPayment); });
+}
+
+function renderMemberLeadershipProfile(memberId) {
+  const officer = buildOfficerDirectory().allOfficers.find((o) => o.memberId === memberId);
+  if (!officer) return "";
+  return `<section class="notice"><h4>Leadership positions</h4><p>${safe(officer.roles.join(", "))}</p>${officer.committees.length ? `<p class="muted">${safe(officer.committees.join(" · "))}</p>` : ""}</section>`;
 }
 
 function renderMemberDuesProfile(memberId, dues) {
@@ -1200,7 +1321,7 @@ function collectSettingsFromForm() {
     const el = document.getElementById(`set_${k}`);
     if (el) next[k] = el.value;
   });
-  ["officerRoles", "memberStatuses", "eventTypes", "committees", "permissionRoles"].forEach((k) => {
+  ["officerRoles", "executiveOfficerRoles", "memberStatuses", "eventTypes", "committees", "permissionRoles"].forEach((k) => {
     const el = document.getElementById(`set_${k}`);
     if (el) next[k] = el.value.split(",").map((x) => x.trim()).filter(Boolean);
   });
@@ -1296,10 +1417,18 @@ function openLeadershipForm(id) {
   document.getElementById("leadershipForm").addEventListener("submit", (ev) => {
     ev.preventDefault();
     const row = Object.fromEntries(new FormData(ev.currentTarget).entries());
+    if (isDuplicateLeadershipAssignment(row, id)) return toast("That member already has this officer assignment.");
     snapshot(existing ? "Officer role edited" : "Officer role added", { type: "leadership", id });
     if (existing) Object.assign(existing, row); else state.leadership.unshift({ id: uid("l"), ...row });
     save(); closeModal(); render();
   });
+}
+
+function isDuplicateLeadershipAssignment(row, existingId = "") {
+  const roleKey = normalizeTitle(row.role);
+  const memberId = row.assignedMember || row.member_id || row.memberId || row.user_id || row.userId || row.profile_id || row.profileId;
+  if (!memberId || !roleKey) return false;
+  return state.leadership.some((l) => l.id !== existingId && !l.archived && (l.assignedMember || l.member_id || l.memberId || l.user_id || l.userId || l.profile_id || l.profileId) === memberId && normalizeTitle(l.role) === roleKey);
 }
 
 function beginImport(target) {
@@ -1398,7 +1527,10 @@ function exportCsv(key) {
 
 function exportRows(key) {
   if (key === "outstanding") return activeMembers().map((m) => ({ member: memberName(m.id), email: m.email, status: memberFinance(m.id).status, balance: memberFinance(m.id).balance, nextDue: memberFinance(m.id).nextDue })).filter((r) => r.balance > 0);
-  if (key === "reports") return [{ report: "Member count", value: metrics().members }, { report: "Total dues billed", value: metrics().totalBilled }, { report: "Total collected", value: metrics().totalCollected }, { report: "Outstanding", value: metrics().outstanding }, { report: "Open tasks", value: metrics().tasks }];
+  if (key === "reports") {
+    const officerDirectory = buildOfficerDirectory();
+    return [{ report: "Member count", value: metrics().members }, { report: "Executive officers", value: officerDirectory.executiveOfficers.length }, { report: "Other officers", value: officerDirectory.otherOfficers.length }, { report: "Total dues billed", value: metrics().totalBilled }, { report: "Total collected", value: metrics().totalCollected }, { report: "Outstanding", value: metrics().outstanding }, { report: "Open tasks", value: metrics().tasks }];
+  }
   if (key === "attendance") return state.attendance;
   return (state[key] || filteredRows(key)).map((r) => ({ ...r, memberName: r.memberId ? memberName(r.memberId) : "" }));
 }
