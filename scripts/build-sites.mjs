@@ -20,14 +20,22 @@ const files = {
 };
 
 const assets = {};
+const indexHtml = await fs.readFile(path.join(src, "index.html"), "utf8");
 for (const [route, info] of Object.entries(files)) {
   assets[route] = {
-    body: await fs.readFile(path.join(src, info.file), "utf8"),
+    body: info.file === "index.html" ? indexHtml : await fs.readFile(path.join(src, info.file), "utf8"),
     type: info.type
   };
   if (route !== "/") {
     await fs.copyFile(path.join(src, info.file), path.join(dist, info.file));
   }
+}
+
+const memberRoutes = ["member", "profile", "balance", "payments", "attendance", "tasks", "calendar", "announcements"];
+for (const route of memberRoutes) {
+  const folder = route === "member" ? path.join(dist, "member") : path.join(dist, "member", route);
+  await fs.mkdir(folder, { recursive: true });
+  await fs.writeFile(path.join(folder, "index.html"), indexHtml);
 }
 
 await fs.copyFile(path.join(root, ".openai", "hosting.json"), path.join(meta, "hosting.json"));
