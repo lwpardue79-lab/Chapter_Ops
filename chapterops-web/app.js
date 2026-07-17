@@ -7,7 +7,7 @@ const money = (n) => Number(n || 0).toLocaleString("en-US", { style: "currency",
 const pct = (n, d) => d ? `${Math.round((n / d) * 100)}%` : "0%";
 const uid = (prefix) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 const safe = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[c]));
-const parseMoney = (v) => Number(String(v || 0).replace(/[$,]/g, "")) || 0;
+const parseMoney = (v) => parseMoneyToCents(v) / 100;
 const setupDebug = (...args) => console.info("[ChapterOps setup]", ...args);
 
 const viewNames = {
@@ -51,6 +51,7 @@ let state = load();
 let setupSave = { saving: false, error: "", success: "", fieldErrors: {} };
 let importState = { importing: false, result: null, error: "", rows: [], target: "", validation: null };
 const pendingDeletes = new Set();
+let financeSort = { key: "lastName", dir: "asc" };
 
 const can = (permission) => roleRules[state.settings.currentRole]?.includes("all") || roleRules[state.settings.currentRole]?.includes(permission);
 const canManage = (area) => can("all") || can(`manage_${area}`);
@@ -111,6 +112,7 @@ function emptyWorkspace() {
     events: [],
     attendance: [],
     finance: [],
+    financeAccounts: [],
     tasks: [],
     leadership: [],
     activity: []
@@ -138,6 +140,7 @@ function normalize(data = {}) {
     events: data.events || [],
     attendance: data.attendance || [],
     finance: data.finance || data.dues || [],
+    financeAccounts: data.financeAccounts || data.finance_accounts || [],
     tasks: data.tasks || [],
     leadership: data.leadership || [],
     activity: data.activity || []
@@ -361,22 +364,147 @@ function financeRows() {
   return state.finance.filter((f) => !f.archived && f.status !== "Archived");
 }
 
+function parseMoneyToCents(value) {
+  if (value === undefined || value === null || value === "") return 0;
+  let raw = String(value).trim();
+  if (!raw) return 0;
+  let negative = false;
+  if (/^\(.+\)$/.test(raw)) {
+    negative = true;
+    raw = raw.slice(1, -1);
+  }
+  raw = raw.replace(/[$,\s]/g, "");
+  if (raw.startsWith("-")) {
+    negative = true;
+    raw = raw.slice(1);
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return NaN;
+  const cents = Math.round(parsed * 100);
+  return negative ? -Math.abs(cents) : cents;
+}
+
+function moneyFromCents(cents) {
+  return money((Number(cents) || 0) / 100);
+}
+
+function memberIdentifier(member = {}) {
+  return String(member.memberId || member.rollNumber || member.nationalMemberNumber || member.badgeNumber || member.memberNumber || member.id || "").trim();
+}
+
+function memberType(member = {}) {
+  return member.memberType || member.initiationStatus || member.memberStatus || "Member";
+}
+
+function normalizeIdentifier(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function financeAccountFor(memberId) {
+  const account = (state.financeAccounts || []).find((f) => f.memberId === memberId && !f.archived && !f.deletedAt) || {};
+  return {
+    memberId,
+    pendingChargeCents: Number(account.pendingChargeCents ?? account.pending_charge_cents ?? 0) || 0,
+    currentBalanceCents: Number(account.currentBalanceCents ?? account.current_balance_cents ?? 0) || 0,
+    paymentPlanStatus: account.paymentPlanStatus || account.payment_plan_status || "None",
+    paymentPlanAmountCents: Number(account.paymentPlanAmountCents ?? account.payment_plan_amount_cents ?? 0) || 0,
+    paymentPlanFrequency: account.paymentPlanFrequency || account.payment_plan_frequency || "",
+    paymentPlanStartDate: account.paymentPlanStartDate || account.payment_plan_start_date || "",
+    paymentPlanEndDate: account.paymentPlanEndDate || account.payment_plan_end_date || "",
+    dueDate: account.dueDate || account.due_date || "",
+    notes: account.notes || "",
+    financialStatus: account.financialStatus || account.financial_status || "",
+    updatedAt: account.updatedAt || account.updated_at || "",
+    updatedBy: account.updatedBy || account.updated_by || ""
+  };
+}
+
+function financeLedgerRows(scope = "filtered") {
+  let rows = activeMembers().map((member) => {
+    const account = financeAccountFor(member.id);
+    const pendingChargeCents = account.pendingChargeCents;
+    const currentBalanceCents = account.currentBalanceCents;
+    const totalBalanceCents = pendingChargeCents + currentBalanceCents;
+    return {
+      id: member.id,
+      memberId: member.id,
+      member,
+      lastName: member.lastName || "",
+      firstName: member.firstName || "",
+      memberIdentifier: memberIdentifier(member),
+      status: member.memberStatus || member.lifecycle || "Active",
+      memberType: memberType(member),
+      pendingChargeCents,
+      currentBalanceCents,
+      totalBalanceCents,
+      paymentPlanStatus: account.paymentPlanStatus,
+      dueDate: account.dueDate,
+      notes: account.notes,
+      updatedAt: account.updatedAt,
+      updatedBy: account.updatedBy
+    };
+  });
+
+  if (scope === "filtered") {
+    const filter = activeFilters.finance || {};
+    const q = String(filter.q || "").toLowerCase();
+    if (q) {
+      rows = rows.filter((row) => [
+        row.lastName, row.firstName, row.memberIdentifier, row.status, row.memberType,
+        row.paymentPlanStatus, String(row.pendingChargeCents / 100), String(row.currentBalanceCents / 100), String(row.totalBalanceCents / 100)
+      ].some((value) => String(value || "").toLowerCase().includes(q)));
+    }
+    if (filter.quick === "balance") rows = rows.filter((row) => row.totalBalanceCents > 0);
+    if (filter.quick === "paid") rows = rows.filter((row) => row.totalBalanceCents === 0);
+    if (filter.quick === "credits") rows = rows.filter((row) => row.totalBalanceCents < 0 || row.currentBalanceCents < 0);
+    if (filter.quick === "plans") rows = rows.filter((row) => row.paymentPlanStatus && row.paymentPlanStatus !== "None");
+    if (filter.quick === "overdue") rows = rows.filter((row) => row.totalBalanceCents > 0 && row.dueDate && row.dueDate < todayIso());
+    if (filter.quick === "nocharge") rows = rows.filter((row) => row.pendingChargeCents === 0);
+  }
+
+  const dir = financeSort.dir === "desc" ? -1 : 1;
+  const sortKey = financeSort.key || "lastName";
+  rows.sort((a, b) => {
+    const av = a[sortKey];
+    const bv = b[sortKey];
+    if (typeof av === "number" || typeof bv === "number") return ((av || 0) - (bv || 0)) * dir;
+    return String(av || "").localeCompare(String(bv || "")) * dir;
+  });
+  return rows;
+}
+
+function financeLedgerTotals(rows = financeLedgerRows("all")) {
+  const pending = rows.reduce((sum, row) => sum + row.pendingChargeCents, 0);
+  const current = rows.reduce((sum, row) => sum + row.currentBalanceCents, 0);
+  const outstanding = rows.reduce((sum, row) => sum + row.totalBalanceCents, 0);
+  return {
+    pending,
+    current,
+    outstanding,
+    withBalance: rows.filter((row) => row.totalBalanceCents > 0).length,
+    paidInFull: rows.filter((row) => row.totalBalanceCents === 0).length,
+    credits: rows.filter((row) => row.totalBalanceCents < 0 || row.currentBalanceCents < 0).length,
+    paymentPlans: rows.filter((row) => row.paymentPlanStatus && row.paymentPlanStatus !== "None").length
+  };
+}
+
 function memberFinance(memberId) {
   const rows = financeRows().filter((f) => f.memberId === memberId);
+  const account = financeAccountFor(memberId);
   const charges = rows.filter((f) => f.type === "Charge").reduce((s, f) => s + parseMoney(f.amount), 0);
   const payments = rows.filter((f) => f.type === "Payment").reduce((s, f) => s + parseMoney(f.amount), 0);
   const waived = rows.filter((f) => f.status === "Waived").reduce((s, f) => s + parseMoney(f.amount), 0);
-  const balance = Math.max(0, charges - payments - waived);
+  const accountBalance = (account.pendingChargeCents + account.currentBalanceCents) / 100;
+  const balance = account.pendingChargeCents || account.currentBalanceCents ? accountBalance : Math.max(0, charges - payments - waived);
   const nextDue = rows.filter((f) => f.type === "Charge" && f.dueDate).sort((a,b) => a.dueDate.localeCompare(b.dueDate))[0]?.dueDate || "";
-  const status = balance === 0 && charges > 0 ? "Paid" : rows.some((f) => f.status === "Payment plan") ? "Payment plan" : rows.some((f) => f.dueDate && f.dueDate < todayIso() && balance > 0) ? "Past due" : payments > 0 ? "Partially paid" : charges > 0 ? "Unpaid" : "Not billed";
-  return { rows, charges, payments, waived, balance, nextDue, status };
+  const status = account.paymentPlanStatus && account.paymentPlanStatus !== "None" ? "Payment plan" : balance === 0 && (charges > 0 || account.pendingChargeCents || account.currentBalanceCents) ? "Paid" : rows.some((f) => f.dueDate && f.dueDate < todayIso() && balance > 0) || (account.dueDate && account.dueDate < todayIso() && balance > 0) ? "Past due" : payments > 0 ? "Partially paid" : balance > 0 ? "Unpaid" : "Not billed";
+  return { rows, charges, payments, waived, balance, nextDue: account.dueDate || nextDue, status, account };
 }
 
 function metrics() {
-  const memberBalances = activeMembers().map((m) => memberFinance(m.id));
-  const totalBilled = financeRows().filter((f) => f.type === "Charge").reduce((s, f) => s + parseMoney(f.amount), 0);
+  const ledgerRows = financeLedgerRows("all");
+  const ledgerTotals = financeLedgerTotals(ledgerRows);
   const totalCollected = financeRows().filter((f) => f.type === "Payment").reduce((s, f) => s + parseMoney(f.amount), 0);
-  const outstanding = memberBalances.reduce((s, f) => s + f.balance, 0);
   const bidsExtended = state.pnms.filter((p) => ["Bid extended", "Accepted", "Declined"].includes(p.status) || p.bidExtendedDate).length;
   const bidsAccepted = state.pnms.filter((p) => p.status === "Accepted" || p.bidAcceptedDate).length;
   return {
@@ -385,14 +513,16 @@ function metrics() {
     pnms: activePnms().length,
     events: upcomingEvents().length,
     tasks: openTasks().length,
-    totalBilled,
+    totalBilled: ledgerTotals.pending / 100,
     totalCollected,
-    outstanding,
-    unpaid: memberBalances.filter((f) => f.status === "Unpaid").length,
-    partial: memberBalances.filter((f) => f.status === "Partially paid").length,
-    paid: memberBalances.filter((f) => f.status === "Paid").length,
-    pastDue: memberBalances.filter((f) => f.status === "Past due").length,
-    plans: memberBalances.filter((f) => f.status === "Payment plan").length,
+    currentBalances: ledgerTotals.current / 100,
+    outstanding: ledgerTotals.outstanding / 100,
+    unpaid: ledgerRows.filter((row) => row.totalBalanceCents > 0 && row.paymentPlanStatus === "None").length,
+    partial: ledgerRows.filter((row) => row.totalBalanceCents > 0 && row.paymentPlanStatus !== "None").length,
+    paid: ledgerTotals.paidInFull,
+    pastDue: ledgerRows.filter((row) => row.totalBalanceCents > 0 && row.dueDate && row.dueDate < todayIso()).length,
+    plans: ledgerTotals.paymentPlans,
+    credits: ledgerTotals.credits,
     pnmFollowUps: activePnms().filter((p) => p.followUpDate && p.followUpDate <= todayIso()).length,
     bidsExtended,
     bidsAccepted,
@@ -711,6 +841,7 @@ function listPanel(title, rows, view) {
 
 function renderCollection(key) {
   if (key === "finance" && !can("view_finance") && !can("all")) return restrictedPanel("Financial data is restricted to Admin, Treasurer, Assistant Treasurer, and President roles.");
+  if (key === "finance") return renderFinanceLedger();
   const meta = collectionMeta[key];
   const rows = filteredRows(key);
   return `<section class="panel">
@@ -728,6 +859,102 @@ function renderCollection(key) {
     ${key === "pnms" ? renderRecruitmentSummary() : ""}
     ${renderTable(key, rows)}
   </section>`;
+}
+
+function renderFinanceLedger() {
+  const filtered = financeLedgerRows("filtered");
+  const allRows = financeLedgerRows("all");
+  const filteredTotals = financeLedgerTotals(filtered);
+  const fullTotals = financeLedgerTotals(allRows);
+  const filter = activeFilters.finance || {};
+  const quickFilters = [
+    ["all", "All members"],
+    ["balance", "With a balance"],
+    ["paid", "Paid in full"],
+    ["credits", "Credits"],
+    ["plans", "Payment plans"],
+    ["overdue", "Overdue"],
+    ["nocharge", "No current charge"]
+  ];
+  return `<section class="panel finance-ledger">
+    <div class="panel-head">
+      <div><p class="eyebrow">Treasurer module</p><h3>Member billing ledger</h3><p class="muted">One current finance row per active member. Total Balance = Pending Charge + Current Balance.</p></div>
+      <div class="button-row">
+        <input class="search" id="searchInput" placeholder="Search name, member ID, status, balances" value="${safe(filter.q || "")}" />
+        <button class="ghost" data-import="finance">Import Finance CSV</button>
+        <button class="ghost" data-export="finance-filtered">Export filtered</button>
+        <button class="ghost" data-export="finance-all">Export all</button>
+        <button class="ghost" data-finance-template>Template</button>
+      </div>
+    </div>
+    ${renderFinanceTotals("Filtered totals", filteredTotals)}
+    ${renderFinanceTotals("Full chapter totals", fullTotals)}
+    <div class="status-strip finance-filters">${quickFilters.map(([value, label]) => `<button class="${(filter.quick || "all") === value ? "active" : ""}" data-finance-filter="${value}">${safe(label)}<strong>${value === "all" ? allRows.length : quickFilterCount(value, allRows)}</strong></button>`).join("")}</div>
+    ${filtered.length ? renderFinanceLedgerTable(filtered) : renderFinanceEmptyState()}
+  </section>`;
+}
+
+function renderFinanceTotals(title, totals) {
+  return `<section class="treasurer-dash finance-totals">
+    <p class="eyebrow">${safe(title)}</p>
+    <div class="mini-grid">
+      ${mini("Total Pending Charges", moneyFromCents(totals.pending))}
+      ${mini("Total Current Balances", moneyFromCents(totals.current))}
+      ${mini("Total Outstanding Balance", moneyFromCents(totals.outstanding))}
+      ${mini("Members with Balance", totals.withBalance)}
+      ${mini("Paid in Full", totals.paidInFull)}
+      ${mini("Credits", totals.credits)}
+      ${mini("Payment Plans", totals.paymentPlans)}
+    </div>
+  </section>`;
+}
+
+function quickFilterCount(filter, rows) {
+  if (filter === "balance") return rows.filter((row) => row.totalBalanceCents > 0).length;
+  if (filter === "paid") return rows.filter((row) => row.totalBalanceCents === 0).length;
+  if (filter === "credits") return rows.filter((row) => row.totalBalanceCents < 0 || row.currentBalanceCents < 0).length;
+  if (filter === "plans") return rows.filter((row) => row.paymentPlanStatus && row.paymentPlanStatus !== "None").length;
+  if (filter === "overdue") return rows.filter((row) => row.totalBalanceCents > 0 && row.dueDate && row.dueDate < todayIso()).length;
+  if (filter === "nocharge") return rows.filter((row) => row.pendingChargeCents === 0).length;
+  return rows.length;
+}
+
+function renderFinanceLedgerTable(rows) {
+  const cols = [
+    ["lastName", "Last Name"],
+    ["firstName", "First Name"],
+    ["memberIdentifier", "Member ID"],
+    ["status", "Status"],
+    ["memberType", "Member Type"],
+    ["pendingChargeCents", "Pending Charge"],
+    ["paymentPlanStatus", "Payment Plan"],
+    ["currentBalanceCents", "Current Balance"],
+    ["totalBalanceCents", "Total Balance"]
+  ];
+  return `<div class="table-wrap finance-table-wrap"><table class="finance-ledger-table"><thead><tr>${cols.map(([key, label]) => `<th><button class="th-sort" data-finance-sort="${key}">${safe(label)}${financeSort.key === key ? ` ${financeSort.dir === "asc" ? "▲" : "▼"}` : ""}</button></th>`).join("")}<th>Actions</th></tr></thead><tbody>
+    ${rows.map((row) => `<tr data-finance-member="${safe(row.memberId)}">
+      ${cols.map(([key, label]) => `<td data-label="${safe(label)}">${formatFinanceCell(row, key)}</td>`).join("")}
+      <td data-label="Actions"><div class="row-actions">${actionAllowed("finance") ? `<button class="small ghost" data-edit-finance="${safe(row.memberId)}">Edit ledger</button><button class="small ghost" data-record-payment="${safe(row.memberId)}">Record payment</button>` : `<button class="small ghost" data-view-finance="${safe(row.memberId)}">View</button>`}</div></td>
+    </tr>`).join("")}
+    <tr class="table-total-row"><td data-label="Totals" colspan="5"><strong>Filtered totals</strong></td><td data-label="Pending Charge"><strong>${moneyFromCents(financeLedgerTotals(rows).pending)}</strong></td><td></td><td data-label="Current Balance"><strong>${moneyFromCents(financeLedgerTotals(rows).current)}</strong></td><td data-label="Total Balance"><strong>${moneyFromCents(financeLedgerTotals(rows).outstanding)}</strong></td><td></td></tr>
+  </tbody></table></div>`;
+}
+
+function formatFinanceCell(row, key) {
+  if (["pendingChargeCents", "currentBalanceCents", "totalBalanceCents"].includes(key)) {
+    const cls = row[key] < 0 ? "credit" : row[key] > 0 ? "balance" : "paid";
+    return `<span class="money ${cls}">${moneyFromCents(row[key])}</span>`;
+  }
+  if (key === "paymentPlanStatus") {
+    const value = row.paymentPlanStatus || "None";
+    return `<span class="status-pill">${safe(value)}</span>`;
+  }
+  return safe(row[key]);
+}
+
+function renderFinanceEmptyState() {
+  if (!activeMembers().length) return `<div class="empty-state"><h3>No active members yet.</h3><p>Add or import your member roster first, then this ledger will show one finance row per member.</p><div class="button-row centered"><button class="primary" data-go="members">Go to members</button><button class="ghost" data-import="members">Import roster</button></div></div>`;
+  return `<div class="empty-state"><h3>No members match these finance filters.</h3><p>Clear filters, import finance balances, or edit a member ledger row.</p><div class="button-row centered"><button class="primary" data-finance-filter="all">Show all members</button><button class="ghost" data-import="finance">Import finance CSV</button></div></div>`;
 }
 
 function actionAllowed(key) {
@@ -993,13 +1220,22 @@ function emptySmall(text) {
 
 function bindViewActions(root) {
   root.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => { applyFilter(el.dataset.go, el.dataset.filter || ""); setView(el.dataset.go); }));
-  root.querySelectorAll("[data-add]").forEach((el) => el.addEventListener("click", () => openForm(el.dataset.add)));
+  root.querySelectorAll("[data-add]").forEach((el) => el.addEventListener("click", () => el.dataset.add === "finance" ? openBulkChargeForm() : openForm(el.dataset.add)));
   root.querySelectorAll("[data-edit]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.edit.split(":"); openForm(key, id); }));
   root.querySelectorAll("[data-archive]").forEach((el) => el.addEventListener("click", async (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.archive.split(":"); await archiveRow(key, id); }));
   root.querySelectorAll("[data-delete]").forEach((el) => el.addEventListener("click", async (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.delete.split(":"); await deleteRow(key, id); }));
   root.querySelectorAll("[data-open]").forEach((el) => el.addEventListener("click", (ev) => { if (ev.target.closest(".row-actions, [data-edit-leadership], [data-edit], [data-archive], [data-delete]")) return; openProfile(el.dataset.open, el.dataset.id); }));
   root.querySelectorAll("[data-export]").forEach((el) => el.addEventListener("click", () => exportCsv(el.dataset.export)));
   root.querySelectorAll("[data-import]").forEach((el) => el.addEventListener("click", () => beginImport(el.dataset.import)));
+  root.querySelectorAll("[data-finance-template]").forEach((el) => el.addEventListener("click", downloadFinanceTemplate));
+  root.querySelectorAll("[data-finance-filter]").forEach((el) => el.addEventListener("click", () => { activeFilters.finance = { ...(activeFilters.finance || {}), quick: el.dataset.financeFilter === "all" ? "" : el.dataset.financeFilter }; render(); }));
+  root.querySelectorAll("[data-finance-sort]").forEach((el) => el.addEventListener("click", () => {
+    const key = el.dataset.financeSort;
+    financeSort = financeSort.key === key ? { key, dir: financeSort.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" };
+    render();
+  }));
+  root.querySelectorAll("[data-edit-finance], [data-view-finance]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); openFinanceAccountForm(el.dataset.editFinance || el.dataset.viewFinance); }));
+  root.querySelectorAll("[data-finance-member]").forEach((el) => el.addEventListener("click", (ev) => { if (ev.target.closest(".row-actions, button")) return; openFinanceAccountForm(el.dataset.financeMember); }));
   root.querySelectorAll("[data-print]").forEach((el) => el.addEventListener("click", () => window.print()));
   root.querySelectorAll("[data-filter-status]").forEach((el) => el.addEventListener("click", () => { activeFilters.pnms = { status: el.dataset.filterStatus }; render(); }));
   root.querySelectorAll("[data-bulk-charge]").forEach((el) => el.addEventListener("click", openBulkChargeForm));
@@ -1278,8 +1514,9 @@ function openProfile(key, id) {
     ${key === "members" ? renderMemberLeadershipProfile(id) : ""}
     <div class="profile-grid">${Object.entries(row).map(([k,v]) => `<div><span>${labelize(k)}</span><strong>${safe(Array.isArray(v) ? v.join(", ") : v)}</strong></div>`).join("")}</div>
     ${renderRelatedAttendance(key, id)}
-    <div class="button-row"><button class="primary" data-edit="${key}:${id}">Edit</button>${key === "members" && can("view_finance") ? `<button class="ghost" data-record-payment="${id}">Record payment</button>` : ""}<button class="ghost" data-close-modal>Close</button></div>`);
+    <div class="button-row"><button class="primary" data-edit="${key}:${id}">Edit</button>${key === "members" && can("view_finance") ? `<button class="ghost" data-edit-finance="${id}">Edit finance ledger</button><button class="ghost" data-record-payment="${id}">Record payment</button>` : ""}<button class="ghost" data-close-modal>Close</button></div>`);
   document.querySelector("#modal [data-edit]")?.addEventListener("click", () => { closeModal(); openForm(key, id); });
+  document.querySelector("#modal [data-edit-finance]")?.addEventListener("click", (ev) => { closeModal(); openFinanceAccountForm(ev.currentTarget.dataset.editFinance); });
   document.querySelector("#modal [data-record-payment]")?.addEventListener("click", (ev) => { closeModal(); openPaymentForm(ev.currentTarget.dataset.recordPayment); });
 }
 
@@ -1290,9 +1527,105 @@ function renderMemberLeadershipProfile(memberId) {
 }
 
 function renderMemberDuesProfile(memberId, dues) {
-  return `<section class="notice"><h4>Member dues profile</h4><div class="mini-grid">
-    ${mini("Charges", money(dues.charges))}${mini("Payments", money(dues.payments))}${mini("Balance", money(dues.balance))}${mini("Status", dues.status)}
-  </div><ul>${dues.rows.length ? dues.rows.map((r) => `<li>${safe(r.type)} · ${money(r.amount)} · ${safe(r.status)} · ${safe(r.paymentDate || r.dueDate || "")}</li>`).join("") : "<li>No dues activity yet.</li>"}</ul></section>`;
+  const account = financeAccountFor(memberId);
+  return `<section class="notice"><h4>Member finance profile</h4><div class="mini-grid">
+    ${mini("Pending Charge", moneyFromCents(account.pendingChargeCents))}
+    ${mini("Current Balance", moneyFromCents(account.currentBalanceCents))}
+    ${mini("Total Balance", moneyFromCents(account.pendingChargeCents + account.currentBalanceCents))}
+    ${mini("Payment Plan", account.paymentPlanStatus || "None")}
+  </div>
+  <p class="muted">Payment and charge history is preserved below. Editing the current ledger row does not delete historical transactions.</p>
+  <ul>${dues.rows.length ? dues.rows.map((r) => `<li>${safe(r.type)} · ${money(r.amount)} · ${safe(r.status)} · ${safe(r.paymentDate || r.dueDate || "")}</li>`).join("") : "<li>No historical dues activity yet.</li>"}</ul></section>`;
+}
+
+function openFinanceAccountForm(memberId) {
+  const member = state.members.find((m) => m.id === memberId);
+  if (!member) return toast("Member not found.");
+  const account = financeAccountFor(memberId);
+  const canEdit = actionAllowed("finance");
+  openModal(`<h3>${canEdit ? "Edit member billing ledger" : "Member finance detail"}</h3>
+    <p class="muted">${safe(memberName(memberId))} · Member ID ${safe(memberIdentifier(member))}</p>
+    <form id="financeAccountForm" class="form-grid">
+      <label>Pending Charge<input name="pendingCharge" type="text" inputmode="decimal" value="${safe((account.pendingChargeCents / 100).toFixed(2))}" ${canEdit ? "" : "disabled"} /></label>
+      <label>Current Balance<input name="currentBalance" type="text" inputmode="decimal" value="${safe((account.currentBalanceCents / 100).toFixed(2))}" ${canEdit ? "" : "disabled"} /></label>
+      <label>Payment Plan<select name="paymentPlanStatus" ${canEdit ? "" : "disabled"}>${["None", "Active", "Past Due", "Completed", "Custom"].map((v) => `<option ${account.paymentPlanStatus === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label>Due date<input name="dueDate" type="date" value="${safe(account.dueDate)}" ${canEdit ? "" : "disabled"} /></label>
+      <label>Financial status<input name="financialStatus" value="${safe(account.financialStatus)}" ${canEdit ? "" : "disabled"} /></label>
+      <label>Payment-plan amount<input name="paymentPlanAmount" type="text" inputmode="decimal" value="${safe((account.paymentPlanAmountCents / 100).toFixed(2))}" ${canEdit ? "" : "disabled"} /></label>
+      <label>Payment-plan frequency<input name="paymentPlanFrequency" value="${safe(account.paymentPlanFrequency)}" placeholder="Monthly, weekly, custom" ${canEdit ? "" : "disabled"} /></label>
+      <label>Payment-plan end<input name="paymentPlanEndDate" type="date" value="${safe(account.paymentPlanEndDate)}" ${canEdit ? "" : "disabled"} /></label>
+      <label class="wide">Notes<textarea name="notes" ${canEdit ? "" : "disabled"}>${safe(account.notes)}</textarea></label>
+      <div class="wide notice">
+        <strong>Total Balance</strong>
+        <p id="financeTotalPreview">${moneyFromCents(account.pendingChargeCents + account.currentBalanceCents)}</p>
+        <p class="muted">Calculated automatically as Pending Charge + Current Balance.</p>
+      </div>
+      <div class="wide button-row">
+        ${canEdit ? `<button class="primary" type="submit">Save ledger row</button>` : ""}
+        <button class="ghost" type="button" data-record-payment="${safe(memberId)}">Record payment</button>
+        <button class="ghost" type="button" data-close-modal>Close</button>
+      </div>
+    </form>`);
+  const form = document.getElementById("financeAccountForm");
+  const preview = () => {
+    const pending = parseMoneyToCents(form.pendingCharge.value);
+    const current = parseMoneyToCents(form.currentBalance.value);
+    document.getElementById("financeTotalPreview").textContent = Number.isNaN(pending) || Number.isNaN(current) ? "Invalid amount" : moneyFromCents(pending + current);
+  };
+  form.pendingCharge?.addEventListener("input", preview);
+  form.currentBalance?.addEventListener("input", preview);
+  document.querySelector("#modal [data-record-payment]")?.addEventListener("click", (ev) => { closeModal(); openPaymentForm(ev.currentTarget.dataset.recordPayment); });
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const formData = Object.fromEntries(new FormData(form).entries());
+    await saveFinanceAccounts([cleanFinanceAccountForm(memberId, formData)], "Finance ledger row saved.");
+  });
+}
+
+function cleanFinanceAccountForm(memberId, formData) {
+  const pendingChargeCents = parseMoneyToCents(formData.pendingCharge);
+  const currentBalanceCents = parseMoneyToCents(formData.currentBalance);
+  const paymentPlanAmountCents = parseMoneyToCents(formData.paymentPlanAmount);
+  if ([pendingChargeCents, currentBalanceCents, paymentPlanAmountCents].some(Number.isNaN)) throw new Error("Enter valid dollar amounts before saving.");
+  return {
+    memberId,
+    pendingChargeCents,
+    currentBalanceCents,
+    paymentPlanStatus: formData.paymentPlanStatus || "None",
+    paymentPlanAmountCents,
+    paymentPlanFrequency: formData.paymentPlanFrequency || "",
+    paymentPlanStartDate: formData.paymentPlanStartDate || "",
+    paymentPlanEndDate: formData.paymentPlanEndDate || "",
+    dueDate: formData.dueDate || "",
+    notes: formData.notes || "",
+    financialStatus: formData.financialStatus || ""
+  };
+}
+
+async function saveFinanceAccounts(accounts, successMessage = "Finance ledger saved.", options = {}) {
+  if (!accounts.length) return;
+  if (!cloud.client) return toast("Supabase is not configured for finance persistence.");
+  try {
+    const { data: sessionData, error: sessionError } = await cloud.client.auth.getSession();
+    if (sessionError) throw sessionError;
+    cloud.user = sessionData.session?.user || cloud.user;
+    if (!cloud.user?.id) throw new Error("You must be signed in to save finance data.");
+    const organizationId = await ensureCloudWorkspace();
+    console.info("[ChapterOps finance]", { userId: cloud.user.id, organizationId, rows: accounts.length, targetTable: "workspace_state.data.financeAccounts" });
+    const { data, error } = await cloud.client.rpc("upsert_finance_accounts_to_workspace", { p_accounts: accounts, p_transactions: options.transactions || [] });
+    if (error) throw error;
+    const result = Array.isArray(data) ? data[0] : data;
+    if (!result?.workspace_data) throw new Error("Finance save completed without returning saved workspace data.");
+    await loadCloudWorkspace({ throwOnError: true });
+    if (options.closeModal !== false) closeModal();
+    render();
+    toast(successMessage);
+    return result;
+  } catch (err) {
+    logSupabaseError("finance save failed", err);
+    toast(formatSupabaseError(err, "Finance data could not be saved."));
+    throw err;
+  }
 }
 
 function renderRelatedAttendance(key, id) {
@@ -1311,15 +1644,28 @@ function openBulkChargeForm() {
     <label class="wide">Notes<textarea name="notes"></textarea></label>
     <div class="wide button-row"><button class="primary">Create charges</button><button class="ghost" type="button" data-close-modal>Cancel</button></div>
   </form>`);
-  document.getElementById("bulkChargeForm").addEventListener("submit", (ev) => {
+  document.getElementById("bulkChargeForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const form = Object.fromEntries(new FormData(ev.currentTarget).entries());
     const targets = activeMembers().filter((m) => form.target === "active" || m.initiationStatus === "New Member" || m.memberStatus === "New Member");
     if (!confirm(`Create a ${money(form.amount)} charge for ${targets.length} members?`)) return;
-    snapshot("Bulk dues charges added", { type: "finance", description: `${targets.length} charges` });
-    targets.forEach((m) => state.finance.unshift({ id: uid("f"), type: "Charge", memberId: m.id, amount: parseMoney(form.amount), category: form.category, status: form.status, dueDate: form.dueDate, paymentDate: "", paymentMethod: "", paymentPlan: "No", notes: form.notes, treasurerNotes: "", archived: false }));
-    recalcMemberDues();
-    save(); closeModal(); render(); toast("Bulk charges created.");
+    const pendingChargeCents = parseMoneyToCents(form.amount);
+    if (Number.isNaN(pendingChargeCents)) return toast("Enter a valid charge amount.");
+    snapshot("Bulk dues ledger charges added", { type: "finance", description: `${targets.length} charges` });
+    const accounts = targets.map((member) => {
+      const current = financeAccountFor(member.id);
+      return {
+        memberId: member.id,
+        pendingChargeCents,
+        currentBalanceCents: current.currentBalanceCents,
+        paymentPlanStatus: form.status === "Payment plan" ? "Active" : current.paymentPlanStatus || "None",
+        dueDate: form.dueDate || current.dueDate,
+        notes: [current.notes, form.notes].filter(Boolean).join("\n"),
+        financialStatus: form.status || current.financialStatus || ""
+      };
+    });
+    const transactions = targets.map((m) => ({ id: uid("f"), type: "Charge", memberId: m.id, amount: pendingChargeCents / 100, category: form.category, status: form.status, dueDate: form.dueDate, paymentDate: "", paymentMethod: "", paymentPlan: form.status === "Payment plan" ? "Yes" : "No", notes: form.notes, treasurerNotes: "", archived: false }));
+    await saveFinanceAccounts(accounts, "Bulk dues charges saved to the ledger.", { transactions });
   });
 }
 
@@ -1336,12 +1682,27 @@ function openPaymentForm(memberId = "") {
     <label class="wide">Treasurer notes<textarea name="treasurerNotes"></textarea></label>
     <div class="wide button-row"><button class="primary">Save payment</button><button class="ghost" type="button" data-close-modal>Cancel</button></div>
   </form>`);
-  document.getElementById("paymentForm").addEventListener("submit", (ev) => {
+  document.getElementById("paymentForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const row = Object.fromEntries(new FormData(ev.currentTarget).entries());
+    const amountCents = parseMoneyToCents(row.amount);
+    if (Number.isNaN(amountCents) || amountCents <= 0) return toast("Enter a valid payment amount.");
     row.type = "Payment";
     row.category = "Dues payment";
-    saveRow("finance", row);
+    row.id = uid("f");
+    row.amount = amountCents / 100;
+    row.archived = false;
+    const current = financeAccountFor(row.memberId);
+    const account = {
+      memberId: row.memberId,
+      pendingChargeCents: current.pendingChargeCents,
+      currentBalanceCents: current.currentBalanceCents - amountCents,
+      paymentPlanStatus: row.paymentPlan === "Yes" ? "Active" : current.paymentPlanStatus || "None",
+      dueDate: current.dueDate,
+      notes: current.notes,
+      financialStatus: current.pendingChargeCents + current.currentBalanceCents - amountCents > 0 ? row.status : "Paid in full"
+    };
+    await saveFinanceAccounts([account], "Payment recorded and ledger balance updated.", { transactions: [row] });
   });
 }
 
@@ -1522,15 +1883,32 @@ function previewCsvImport(target, text) {
 
 function renderImportPreview() {
   const { target, rows, validation, importing, result, error } = importState;
-  const goodCount = rows.length - validation.errors.length;
-  const disableImport = importing || !rows.length || (target !== "members" && validation.errors.length) || (target === "members" && goodCount === 0);
+  const goodCount = target === "finance" ? (validation.previewRows || []).length : rows.length - validation.errors.length;
+  const disableImport = importing || !rows.length || (target !== "members" && target !== "finance" && validation.errors.length) || (target === "members" && goodCount === 0) || (target === "finance" && goodCount === 0);
   openModal(`<h3>Preview ${labelize(target)} import</h3><p>${goodCount} valid rows, ${validation.errors.length} rows need attention.</p>
     ${validation.errors.length ? `<div class="notice"><h4>Errors</h4><ul>${validation.errors.slice(0, 12).map((e) => `<li>${safe(e)}</li>`).join("")}</ul></div>` : ""}
+    ${validation.warnings?.length ? `<div class="notice"><h4>Warnings</h4><ul>${validation.warnings.slice(0, 12).map((e) => `<li>${safe(e)}</li>`).join("")}</ul></div>` : ""}
     ${error ? `<div class="notice error-notice"><h4>Import failed</h4><p>${safe(error)}</p></div>` : ""}
     ${result ? renderImportResult(result) : ""}
-    <div class="table-wrap"><table><thead><tr>${Object.keys(rows[0] || {}).map((h) => `<th>${safe(h)}</th>`).join("")}</tr></thead><tbody>${rows.slice(0, 8).map((r) => `<tr>${Object.values(r).map((v) => `<td>${safe(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    ${target === "finance" ? renderFinanceImportPreviewTable(validation.previewRows || []) : `<div class="table-wrap"><table><thead><tr>${Object.keys(rows[0] || {}).map((h) => `<th>${safe(h)}</th>`).join("")}</tr></thead><tbody>${rows.slice(0, 8).map((r) => `<tr>${Object.values(r).map((v) => `<td>${safe(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`}
     <div class="button-row"><button class="primary" id="confirmImport" ${disableImport ? "disabled" : ""}>${importing ? "Importing…" : result?.failed ? "Retry import" : "Import rows"}</button><button class="ghost" data-close-modal>${result ? "Close" : "Cancel"}</button></div>`);
   document.getElementById("confirmImport")?.addEventListener("click", confirmCsvImport);
+}
+
+function renderFinanceImportPreviewTable(rows) {
+  if (!rows.length) return `<div class="empty-state"><h3>No valid finance rows ready to import.</h3><p>Fix the CSV rows above, then upload again.</p></div>`;
+  const cols = [
+    ["lastName", "Last Name"],
+    ["firstName", "First Name"],
+    ["memberIdentifier", "Member ID"],
+    ["status", "Status"],
+    ["memberType", "Member Type"],
+    ["pendingChargeCents", "Pending Charge"],
+    ["paymentPlanStatus", "Payment Plan"],
+    ["currentBalanceCents", "Current Balance"],
+    ["totalBalanceCents", "Total Balance"]
+  ];
+  return `<div class="table-wrap"><table><thead><tr>${cols.map(([, label]) => `<th>${safe(label)}</th>`).join("")}</tr></thead><tbody>${rows.slice(0, 12).map((row) => `<tr>${cols.map(([key, label]) => `<td data-label="${safe(label)}">${["pendingChargeCents", "currentBalanceCents", "totalBalanceCents"].includes(key) ? moneyFromCents(row[key]) : safe(row[key])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
 function renderImportResult(result) {
@@ -1543,6 +1921,12 @@ function renderImportResult(result) {
       ${mini("Skipped", result.skipped ?? 0)}
       ${mini("Failed", result.failed ?? 0)}
     </div>
+    ${result.totalPendingImported !== undefined ? `<div class="mini-grid">
+      ${mini("Pending imported", moneyFromCents(result.totalPendingImported))}
+      ${mini("Current imported", moneyFromCents(result.totalCurrentImported))}
+      ${mini("Total imported", moneyFromCents(result.totalBalanceImported))}
+    </div>` : ""}
+    ${result.warnings?.length ? `<h4>Warnings</h4><ul>${result.warnings.slice(0, 20).map((r) => `<li>${safe(r)}</li>`).join("")}</ul>` : ""}
     ${result.failedRows?.length ? `<ul>${result.failedRows.slice(0, 20).map((r) => `<li>Row ${safe(r.rowNumber || "")}: ${safe(r.name || "Unnamed")} — ${safe(r.reason || "Failed")}</li>`).join("")}</ul>` : ""}
   </div>`;
 }
@@ -1551,6 +1935,7 @@ async function confirmCsvImport() {
   const { target, rows } = importState;
   if (importState.importing) return;
   if (target === "members") return importMembersCsv(rows);
+  if (target === "finance") return importFinanceCsv();
 
   try {
     importState.importing = true;
@@ -1625,6 +2010,52 @@ async function importMembersCsv(rows) {
   }
 }
 
+async function importFinanceCsv() {
+  importState.importing = true;
+  importState.error = "";
+  renderImportPreview();
+  try {
+    const validation = importState.validation || validateFinanceImport(importState.rows);
+    const rows = validation.previewRows || [];
+    if (!rows.length) throw new Error("No valid finance rows are ready to import.");
+    const accounts = rows.map((row) => ({
+      memberId: row.memberId,
+      pendingChargeCents: row.pendingChargeCents,
+      currentBalanceCents: row.currentBalanceCents,
+      paymentPlanStatus: row.paymentPlanStatus || "None",
+      dueDate: row.dueDate || "",
+      notes: row.notes || "",
+      financialStatus: row.totalBalanceCents > 0 ? "Outstanding" : row.totalBalanceCents < 0 ? "Credit" : "Paid in full"
+    }));
+    const result = await saveFinanceAccounts(accounts, "Finance import saved to Supabase.", { closeModal: false });
+    const totals = financeLedgerTotals(rows);
+    importState.importing = false;
+    importState.result = {
+      totalRows: importState.rows.length,
+      validRows: rows.length,
+      inserted: result?.inserted ?? 0,
+      updated: result?.updated ?? 0,
+      skipped: result?.skipped ?? 0,
+      failed: validation.failedRows?.length || 0,
+      failedRows: validation.failedRows || [],
+      warnings: validation.warnings || [],
+      totalPendingImported: totals.pending,
+      totalCurrentImported: totals.current,
+      totalBalanceImported: totals.outstanding
+    };
+    importState.error = "";
+    render();
+    renderImportPreview();
+  } catch (err) {
+    logSupabaseError("finance CSV import failed", err);
+    importState.importing = false;
+    importState.result = null;
+    importState.error = formatSupabaseError(err, "Finance import failed.");
+    renderImportPreview();
+    toast("Finance import failed.");
+  }
+}
+
 function parseCsv(text) {
   const lines = text.trim().split(/\r?\n/).filter(Boolean);
   const headers = splitCsvLine(lines.shift() || "").map((h) => h.trim());
@@ -1646,6 +2077,7 @@ function splitCsvLine(line) {
 }
 
 function validateImport(target, rows) {
+  if (target === "finance") return validateFinanceImport(rows);
   const errors = [];
   const failedRows = [];
   rows.forEach((row, i) => {
@@ -1658,10 +2090,100 @@ function validateImport(target, rows) {
       errors.push(`Row ${i + 2}: invalid email format.`);
       failedRows.push({ rowNumber: i + 2, name: `${clean.firstName || ""} ${clean.lastName || ""}`.trim(), reason: "Invalid email format." });
     }
-    if (target === "finance" && (!row.memberId && !row.email && !row.phone)) errors.push(`Row ${i + 2}: finance import needs memberId, email, or phone.`);
-    if (target === "finance" && !parseMoney(row.amount || row.owed || row.paid)) errors.push(`Row ${i + 2}: amount is required.`);
   });
   return { errors, failedRows };
+}
+
+function validateFinanceImport(rows) {
+  const errors = [];
+  const warnings = [];
+  const failedRows = [];
+  const previewRows = [];
+  const seenMemberIds = new Set();
+  rows.forEach((row, i) => {
+    const clean = cleanFinanceImportRow(row, i + 2);
+    const member = findMemberForFinanceImport(clean);
+    const name = `${clean.firstName || ""} ${clean.lastName || ""}`.trim() || clean.memberId || clean.email || "Unnamed";
+    if (!clean.memberId && !clean.email && !clean.phone) {
+      const reason = "Finance import needs memberId, email, or phone.";
+      errors.push(`Row ${i + 2}: ${reason}`);
+      failedRows.push({ rowNumber: i + 2, name, reason });
+      return;
+    }
+    if (!member) {
+      const reason = "No existing active member matched this Member ID, email, or phone.";
+      errors.push(`Row ${i + 2}: ${reason}`);
+      failedRows.push({ rowNumber: i + 2, name, reason });
+      return;
+    }
+    if (seenMemberIds.has(member.id)) {
+      const reason = "Duplicate Member ID in this CSV.";
+      errors.push(`Row ${i + 2}: ${reason}`);
+      failedRows.push({ rowNumber: i + 2, name, reason });
+      return;
+    }
+    seenMemberIds.add(member.id);
+    if ([clean.pendingChargeCents, clean.currentBalanceCents, clean.totalBalanceCents].some(Number.isNaN)) {
+      const reason = "Invalid dollar amount.";
+      errors.push(`Row ${i + 2}: ${reason}`);
+      failedRows.push({ rowNumber: i + 2, name, reason });
+      return;
+    }
+    const calculatedTotalCents = clean.pendingChargeCents + clean.currentBalanceCents;
+    if (clean.totalBalanceProvided && clean.totalBalanceCents !== calculatedTotalCents) {
+      warnings.push(`Row ${i + 2}: totalBalance did not match pendingCharge + currentBalance. The calculated value ${moneyFromCents(calculatedTotalCents)} will be used.`);
+    }
+    previewRows.push({
+      rowNumber: i + 2,
+      memberId: member.id,
+      lastName: clean.lastName || member.lastName || "",
+      firstName: clean.firstName || member.firstName || "",
+      memberIdentifier: memberIdentifier(member),
+      status: clean.status || member.memberStatus || "Active",
+      memberType: clean.memberType || memberType(member),
+      pendingChargeCents: clean.pendingChargeCents,
+      paymentPlanStatus: clean.paymentPlan || "None",
+      currentBalanceCents: clean.currentBalanceCents,
+      totalBalanceCents: calculatedTotalCents
+    });
+  });
+  return { errors, warnings, failedRows, previewRows };
+}
+
+function cleanFinanceImportRow(row, csvRowNumber) {
+  const clean = cleanImportRow(row);
+  const pendingRaw = clean.pendingCharge ?? clean.amount ?? clean.owed ?? clean.charge ?? "0";
+  const currentRaw = clean.currentBalance ?? clean.previousBalance ?? clean.balance ?? "0";
+  const totalRaw = clean.totalBalance;
+  const rollNumber = clean.memberId || clean.rollNumber || clean.nationalMemberNumber || clean.badgeNumber || clean.memberNumber || "";
+  return {
+    csvRowNumber,
+    memberId: String(rollNumber || "").trim(),
+    email: String(clean.email || "").trim().toLowerCase(),
+    phone: String(clean.phone || "").replace(/\D/g, ""),
+    firstName: clean.firstName || "",
+    lastName: clean.lastName || "",
+    status: clean.status || "",
+    memberType: clean.memberType || "",
+    paymentPlan: clean.paymentPlan || clean.paymentPlanStatus || "None",
+    pendingChargeCents: parseMoneyToCents(pendingRaw),
+    currentBalanceCents: parseMoneyToCents(currentRaw),
+    totalBalanceCents: totalRaw === undefined || totalRaw === null || totalRaw === "" ? 0 : parseMoneyToCents(totalRaw),
+    totalBalanceProvided: !(totalRaw === undefined || totalRaw === null || totalRaw === ""),
+    dueDate: clean.dueDate || "",
+    notes: clean.notes || ""
+  };
+}
+
+function findMemberForFinanceImport(row) {
+  const members = activeMembers();
+  const id = normalizeIdentifier(row.memberId);
+  const email = normalizeIdentifier(row.email);
+  const phone = String(row.phone || "").replace(/\D/g, "");
+  return members.find((m) => id && normalizeIdentifier(memberIdentifier(m)) === id)
+    || members.find((m) => id && normalizeIdentifier(m.id) === id)
+    || members.find((m) => email && normalizeIdentifier(m.email) === email)
+    || members.find((m) => phone && String(m.phone || "").replace(/\D/g, "") === phone);
 }
 
 function importRow(target, row) {
@@ -1731,6 +2253,20 @@ function exportCsv(key) {
 }
 
 function exportRows(key) {
+  if (key === "finance" || key === "finance-filtered" || key === "finance-all") {
+    const rows = financeLedgerRows(key === "finance-all" ? "all" : "filtered");
+    return rows.map((row) => ({
+      lastName: row.lastName,
+      firstName: row.firstName,
+      memberId: row.memberIdentifier,
+      status: row.status,
+      memberType: row.memberType,
+      pendingCharge: (row.pendingChargeCents / 100).toFixed(2),
+      paymentPlan: row.paymentPlanStatus || "None",
+      currentBalance: (row.currentBalanceCents / 100).toFixed(2),
+      totalBalance: (row.totalBalanceCents / 100).toFixed(2)
+    }));
+  }
   if (key === "outstanding") return activeMembers().map((m) => ({ member: memberName(m.id), email: m.email, status: memberFinance(m.id).status, balance: memberFinance(m.id).balance, nextDue: memberFinance(m.id).nextDue })).filter((r) => r.balance > 0);
   if (key === "reports") {
     const officerDirectory = buildOfficerDirectory();
@@ -1738,6 +2274,12 @@ function exportRows(key) {
   }
   if (key === "attendance") return state.attendance;
   return (state[key] || filteredRows(key)).map((r) => ({ ...r, memberName: r.memberId ? memberName(r.memberId) : "" }));
+}
+
+function downloadFinanceTemplate() {
+  download("chapterops-finance-template.csv", [
+    "lastName,firstName,memberId,status,memberType,pendingCharge,paymentPlan,currentBalance,totalBalance"
+  ].join("\n"), "text/csv");
 }
 
 function download(name, content, type) {
