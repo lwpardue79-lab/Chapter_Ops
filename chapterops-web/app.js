@@ -50,6 +50,7 @@ let cloud = { client: null, user: null, profile: null, profiles: [], organizatio
 let state = load();
 let setupSave = { saving: false, error: "", success: "", fieldErrors: {} };
 let importState = { importing: false, result: null, error: "", rows: [], target: "", validation: null };
+const pendingDeletes = new Set();
 
 const can = (permission) => roleRules[state.settings.currentRole]?.includes("all") || roleRules[state.settings.currentRole]?.includes(permission);
 const canManage = (area) => can("all") || can(`manage_${area}`);
@@ -348,7 +349,7 @@ async function syncCloudWorkspace(showToast = true) {
 }
 
 const uniqueMembersById = (members = []) => [...new Map(members.filter((m) => m?.id).map((m) => [m.id, m])).values()];
-const activeMembers = () => uniqueMembersById(state.members).filter((m) => !m.archived && m.lifecycle !== "Archived" && m.memberStatus !== "Archived");
+const activeMembers = () => uniqueMembersById(state.members).filter((m) => !m.archived && !m.deletedAt && m.lifecycle !== "Archived" && m.memberStatus !== "Archived");
 const memberName = (id) => state.members.find((m) => m.id === id) ? `${state.members.find((m) => m.id === id).firstName} ${state.members.find((m) => m.id === id).lastName}` : "";
 const pnmName = (id) => state.pnms.find((p) => p.id === id) ? `${state.pnms.find((p) => p.id === id).firstName} ${state.pnms.find((p) => p.id === id).lastName}` : "";
 const eventName = (id) => state.events.find((e) => e.id === id)?.name || "";
@@ -434,7 +435,7 @@ function buildOfficerDirectory() {
   const byMember = new Map();
   const ensureGroup = (memberId) => {
     const member = state.members.find((m) => m.id === memberId);
-    if (!member || member.archived || member.lifecycle === "Archived") return null;
+    if (!member || member.archived || member.deletedAt || member.lifecycle === "Archived") return null;
     if (!byMember.has(memberId)) {
       byMember.set(memberId, {
         memberId,
@@ -740,7 +741,7 @@ function actionAllowed(key) {
 
 function filteredRows(key) {
   const q = (activeFilters[key]?.q || "").toLowerCase();
-  let rows = (state[key] || []).filter((r) => !r.archived && r.status !== "Archived" && r.lifecycle !== "Archived");
+  let rows = (state[key] || []).filter((r) => !r.archived && !r.deletedAt && r.status !== "Archived" && r.lifecycle !== "Archived");
   if (key === "members") rows = uniqueMembersById(rows);
   if (key === "finance" && activeFilters[key]?.outstanding) rows = activeMembers().map((m) => ({ ...memberFinance(m.id), id: m.id, memberId: m.id, type: "Member balance", amount: memberFinance(m.id).charges, balanceAfter: memberFinance(m.id).balance, status: memberFinance(m.id).status, dueDate: memberFinance(m.id).nextDue })).filter((r) => r.balance > 0);
   if (key === "finance" && activeFilters[key]?.pastdue) rows = activeMembers().map((m) => ({ ...memberFinance(m.id), id: m.id, memberId: m.id, type: "Member balance", amount: memberFinance(m.id).charges, balanceAfter: memberFinance(m.id).balance, status: memberFinance(m.id).status, dueDate: memberFinance(m.id).nextDue })).filter((r) => r.status === "Past due");
@@ -777,7 +778,8 @@ function rowActions(key, row) {
   }
   const editable = actionAllowed(key);
   const quick = key === "finance" ? `<button class="small ghost" data-record-payment="${row.memberId || ""}">Record payment</button>` : key === "tasks" ? `<button class="small ghost" data-task-done="${row.id}">Done</button>` : "";
-  return `<div class="row-actions">${quick}${editable ? `<button class="small ghost" data-edit="${key}:${row.id}">Edit</button><button class="small ghost" data-archive="${key}:${row.id}">Archive</button>${can("all") ? `<button class="small danger" data-delete="${key}:${row.id}">Delete</button>` : ""}` : ""}</div>`;
+  const deleting = pendingDeletes.has(`${key}:${row.id}`);
+  return `<div class="row-actions">${quick}${editable ? `<button class="small ghost" data-edit="${key}:${row.id}" ${deleting ? "disabled" : ""}>Edit</button><button class="small ghost" data-archive="${key}:${row.id}" ${deleting ? "disabled" : ""}>Archive</button>${can("all") ? `<button class="small danger" data-delete="${key}:${row.id}" ${deleting ? "disabled" : ""}>${deleting ? "Removing…" : "Delete"}</button>` : ""}` : ""}</div>`;
 }
 
 function formatCell(key, row, col) {
@@ -993,8 +995,8 @@ function bindViewActions(root) {
   root.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => { applyFilter(el.dataset.go, el.dataset.filter || ""); setView(el.dataset.go); }));
   root.querySelectorAll("[data-add]").forEach((el) => el.addEventListener("click", () => openForm(el.dataset.add)));
   root.querySelectorAll("[data-edit]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.edit.split(":"); openForm(key, id); }));
-  root.querySelectorAll("[data-archive]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.archive.split(":"); archiveRow(key, id); }));
-  root.querySelectorAll("[data-delete]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.delete.split(":"); deleteRow(key, id); }));
+  root.querySelectorAll("[data-archive]").forEach((el) => el.addEventListener("click", async (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.archive.split(":"); await archiveRow(key, id); }));
+  root.querySelectorAll("[data-delete]").forEach((el) => el.addEventListener("click", async (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.delete.split(":"); await deleteRow(key, id); }));
   root.querySelectorAll("[data-open]").forEach((el) => el.addEventListener("click", (ev) => { if (ev.target.closest(".row-actions, [data-edit-leadership], [data-edit], [data-archive], [data-delete]")) return; openProfile(el.dataset.open, el.dataset.id); }));
   root.querySelectorAll("[data-export]").forEach((el) => el.addEventListener("click", () => exportCsv(el.dataset.export)));
   root.querySelectorAll("[data-import]").forEach((el) => el.addEventListener("click", () => beginImport(el.dataset.import)));
@@ -1197,7 +1199,8 @@ function samePerson(a, b) {
   return sameName || samePhone || sameEmail;
 }
 
-function archiveRow(key, id) {
+async function archiveRow(key, id) {
+  if (key === "members") return deleteRow(key, id);
   if (!confirm("Archive this record? It will be hidden but not permanently deleted.")) return;
   snapshot(`${labelize(key)} archived`, { type: key, id });
   const row = state[key].find((r) => r.id === id);
@@ -1208,14 +1211,61 @@ function archiveRow(key, id) {
   }
   recalcMemberDues();
   save(); render(); toast("Archived. Use Undo if needed.");
+  if (cloud.user) await syncCloudWorkspace(false);
 }
 
-function deleteRow(key, id) {
+async function deleteRow(key, id) {
+  if (key === "members") return archiveMemberInCloud(id);
   if (!confirm("Permanently delete this record? Archive is safer. Continue only if you are sure.")) return;
   snapshot(`${labelize(key)} deleted`, { type: key, id });
   state[key] = state[key].filter((r) => r.id !== id);
   recalcMemberDues();
   save(); render(); toast("Deleted. Use Undo if needed.");
+  if (cloud.user) await syncCloudWorkspace(false);
+}
+
+function memberDependencySummary(memberId) {
+  return {
+    finance: state.finance.filter((f) => !f.archived && (f.memberId === memberId || f.member_id === memberId)).length,
+    attendance: state.attendance.filter((a) => a.personId === memberId || a.memberId === memberId || a.member_id === memberId).length,
+    tasks: state.tasks.filter((t) => !t.archived && [t.assignedPerson, t.relatedMember, t.memberId, t.member_id].includes(memberId)).length,
+    leadership: state.leadership.filter((l) => !l.archived && [l.assignedMember, l.memberId, l.member_id, l.profileId, l.profile_id].includes(memberId)).length
+  };
+}
+
+async function archiveMemberInCloud(memberId) {
+  const member = state.members.find((m) => m.id === memberId);
+  if (!member) return toast("Member not found.");
+  const deps = memberDependencySummary(memberId);
+  const hasHistory = deps.finance || deps.attendance || deps.tasks || deps.leadership;
+  const message = hasHistory
+    ? `${memberName(memberId)} has linked records (${deps.finance} finance, ${deps.attendance} attendance, ${deps.tasks} tasks, ${deps.leadership} officer assignments). They will be archived and removed from active rosters, while historical records are preserved. Continue?`
+    : `Remove ${memberName(memberId)} from the active roster? This archives the member in Supabase.`;
+  if (!confirm(message)) return;
+  if (!cloud.client) return toast("Supabase is not configured.");
+  pendingDeletes.add(`members:${memberId}`);
+  render();
+  try {
+    const { data: sessionData, error: sessionError } = await cloud.client.auth.getSession();
+    if (sessionError) throw sessionError;
+    cloud.user = sessionData.session?.user || cloud.user;
+    if (!cloud.user?.id) throw new Error("You must be signed in to remove a member.");
+    const organizationId = await ensureCloudWorkspace();
+    console.info("[ChapterOps delete]", { userId: cloud.user.id, organizationId, memberId, dependencySummary: deps });
+    const { data, error } = await cloud.client.rpc("archive_member_in_workspace", { p_member_id: memberId });
+    if (error) throw error;
+    const result = Array.isArray(data) ? data[0] : data;
+    if (!result?.workspace_data) throw new Error("Member archive completed without returning saved workspace data.");
+    await loadCloudWorkspace({ throwOnError: true });
+    pendingDeletes.delete(`members:${memberId}`);
+    render();
+    toast(result.alreadyArchived ? "Member was already archived." : "Member removed from active roster.");
+  } catch (err) {
+    logSupabaseError("member archive failed", err);
+    pendingDeletes.delete(`members:${memberId}`);
+    render();
+    toast(formatSupabaseError(err, "The delete request failed. The member was not removed."));
+  }
 }
 
 function openProfile(key, id) {
@@ -1550,8 +1600,6 @@ async function importMembersCsv(rows) {
     if (error) throw error;
     const result = Array.isArray(data) ? data[0] : data;
     if (!result?.workspace_data) throw new Error("Import completed without returning saved workspace data.");
-    state = normalize(result.workspace_data);
-    save();
     await loadCloudWorkspace({ throwOnError: true });
     importState.importing = false;
     importState.result = {
