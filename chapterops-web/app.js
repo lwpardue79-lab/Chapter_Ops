@@ -13,11 +13,12 @@ const setupDebug = (...args) => console.info("[ChapterOps setup]", ...args);
 const viewNames = {
   dashboard: "Executive Dashboard",
   members: "Member Roster",
+  leadership: "Executive Team",
   recruitment: "Recruitment / PNMs",
-  events: "Events & Attendance",
+  events: "Attendance",
   finance: "Treasurer / Dues",
+  kpis: "KPI Reports",
   tasks: "Tasks / Follow-Ups",
-  leadership: "Officers & Committees",
   reports: "Reports",
   settings: "Setup / Settings"
 };
@@ -35,11 +36,11 @@ const roleRules = {
 };
 
 const defaults = {
-  officerRoles: ["President", "Internal Vice President", "External Vice President", "Treasurer", "Assistant Treasurer", "Recruitment Chair / VPMD", "Secretary", "Risk Manager", "Brotherhood Chair", "Philanthropy Chair", "Social Chair", "New Member Educator", "Sergeant at Arms", "Alumni Relations", "General member"],
+  officerRoles: ["President", "Internal Vice President", "External Vice President", "Treasurer", "Assistant Treasurer", "VPMD", "Recruitment", "Secretary", "Risk Management", "Health and Safety", "Scholarship", "New Member Education", "Sergeant at Arms", "Alumni Relations", "Social", "House Manager", "Philanthropy", "General member"],
   memberStatuses: ["Active", "New Member", "Inactive", "Alumni", "Archived"],
   eventTypes: ["Chapter", "Brotherhood", "Recruitment", "Philanthropy", "Social", "New member education", "Executive meeting", "Committee meeting", "Risk management", "Alumni", "Other"],
   committees: ["Executive", "Recruitment", "Brotherhood", "Philanthropy", "Risk Management", "Social", "Finance", "Alumni Relations", "Operations"],
-  executiveOfficerRoles: ["President", "Internal Vice President", "External Vice President", "Treasurer", "Secretary", "Sergeant at Arms"],
+  executiveOfficerRoles: ["President", "Internal Vice President", "External Vice President", "Treasurer", "Assistant Treasurer", "VPMD", "Recruitment", "Secretary", "Risk Management", "Health and Safety", "Scholarship", "New Member Education", "Sergeant at Arms", "Alumni Relations", "Social", "House Manager", "Philanthropy"],
   paymentStatuses: ["Not billed", "Unpaid", "Partially paid", "Paid", "Past due", "Payment plan", "Waived", "Archived"]
 };
 
@@ -115,6 +116,11 @@ function emptyWorkspace() {
     financeAccounts: [],
     tasks: [],
     leadership: [],
+    kpiMeetings: [],
+    kpiDefinitions: [],
+    kpiPositionReports: [],
+    kpiResults: [],
+    kpiActionItems: [],
     activity: []
   };
 }
@@ -142,7 +148,12 @@ function normalize(data = {}) {
     finance: data.finance || data.dues || [],
     financeAccounts: data.financeAccounts || data.finance_accounts || [],
     tasks: data.tasks || [],
-    leadership: data.leadership || [],
+    leadership: normalizeLeadershipAssignments(data.leadership || []),
+    kpiMeetings: data.kpiMeetings || data.kpi_meetings || [],
+    kpiDefinitions: data.kpiDefinitions || data.kpi_definitions || [],
+    kpiPositionReports: data.kpiPositionReports || data.kpi_position_reports || [],
+    kpiResults: data.kpiResults || data.kpi_results || [],
+    kpiActionItems: data.kpiActionItems || data.kpi_action_items || [],
     activity: data.activity || []
   };
 }
@@ -342,6 +353,7 @@ async function loadCloudWorkspace(options = {}) {
 async function syncCloudWorkspace(showToast = true) {
   try {
     const organizationId = await ensureCloudWorkspace();
+    state = normalize(state);
     const { error } = await cloud.client.from("workspace_state").upsert({ organization_id: organizationId, data: state, updated_by: cloud.user.id, updated_at: new Date().toISOString() }, { onConflict: "organization_id" });
     if (error) throw error;
     if (showToast) toast("Cloud workspace synced.");
@@ -535,29 +547,90 @@ function normalizeTitle(title = "") {
     .toLowerCase()
     .replace(/^tpe[_\s-]*/i, "")
     .replace(/chairman/g, "chair")
-    .replace(/vp of membership development/g, "recruitment chair / vpmd")
+    .replace(/vp of membership development/g, "vice president of membership development")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
 
+function canonicalPositionTitle(role = "") {
+  const key = normalizeTitle(role);
+  if (!key) return "";
+  if (["vpmd", "vp membership development", "vice president of membership development", "vice president membership development", "membership development", "brotherhood", "brotherhood chair", "brotherhood vpmd", "vpmd brotherhood"].includes(key)) return "VPMD";
+  if (["recruitment", "recruitment chair", "rush", "new member recruitment"].includes(key)) return "Recruitment";
+  if (["risk manager", "risk management", "health safety", "health and safety", "health and safety officer"].includes(key)) return key.includes("health") ? "Health and Safety" : "Risk Management";
+  if (["new member educator", "new member education", "tpe new member educator"].includes(key)) return "New Member Education";
+  if (["alumni relations", "alumni relations chair"].includes(key)) return "Alumni Relations";
+  if (["social chair", "social"].includes(key)) return "Social";
+  if (["philanthropy chair", "philanthropy"].includes(key)) return "Philanthropy";
+  if (["sergeant at arms"].includes(key)) return "Sergeant at Arms";
+  return String(role || "").replace(/^TPE[_\s-]*/i, "").replace(/\s+/g, " ").trim();
+}
+
+function positionFullTitle(position = "") {
+  if (position === "VPMD") return "Vice President of Membership Development";
+  return position;
+}
+
+function positionResponsibilityLabel(position = "", original = "") {
+  if (position === "VPMD") return "Brotherhood";
+  if (position === "Recruitment") return "Recruitment";
+  const key = normalizeTitle(original || position);
+  if (key.includes("risk")) return "Risk Management";
+  if (key.includes("health") || key.includes("safety")) return "Health and Safety";
+  return "";
+}
+
+function displayPosition(position = "", original = "") {
+  const label = positionResponsibilityLabel(position, original);
+  return label && label !== position ? `${position} — ${label}` : position;
+}
+
+function normalizeLeadershipAssignments(assignments = []) {
+  const seen = new Set();
+  return (assignments || []).map((assignment) => {
+    const role = canonicalPositionTitle(assignment.role || assignment.position || "");
+    return {
+      ...assignment,
+      role: role || assignment.role || "",
+      formalPosition: role || assignment.formalPosition || assignment.role || "",
+      fullPositionTitle: positionFullTitle(role || assignment.role || ""),
+      responsibilityLabel: positionResponsibilityLabel(role || assignment.role || "", assignment.role),
+      isExecutive: assignment.archived ? Boolean(assignment.isExecutive) : true,
+      is_executive: assignment.archived ? Boolean(assignment.is_executive) : true
+    };
+  }).filter((assignment) => {
+    const memberId = assignment.assignedMember || assignment.member_id || assignment.memberId || assignment.user_id || assignment.userId || assignment.profile_id || assignment.profileId || "";
+    const key = `${memberId}:${normalizeTitle(assignment.role)}:${assignment.termStartDate || assignment.term_start_date || ""}:${assignment.termEndDate || assignment.term_end_date || ""}:${assignment.archived ? "archived" : "active"}`;
+    if (!memberId || !assignment.role || assignment.archived) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function isExecutiveRole(role = "", assignment = {}) {
+  if (!assignment.archived && role && canonicalPositionTitle(role) !== "General member") return true;
   if (assignment.is_executive === true || assignment.isExecutive === true || assignment.executive_board === true || assignment.executiveBoard === true) return true;
   if (["executive", "executive board", "exec", "exec board"].includes(normalizeTitle(assignment.officer_type || assignment.officerType || assignment.position_category || assignment.positionCategory || assignment.role_category || assignment.roleCategory))) return true;
   const executiveRoles = state.settings.executiveOfficerRoles || defaults.executiveOfficerRoles;
-  const roleKey = normalizeTitle(role);
-  return executiveRoles.map(normalizeTitle).includes(roleKey);
+  const roleKey = normalizeTitle(canonicalPositionTitle(role));
+  return executiveRoles.map((r) => normalizeTitle(canonicalPositionTitle(r))).includes(roleKey);
 }
 
 function addOfficerRole(group, item) {
-  const title = String(item.role || "").trim();
+  const title = canonicalPositionTitle(item.role || item.position || "");
   if (!title) return;
   if (!group.roleKeys.has(normalizeTitle(title))) {
     group.roles.push(title);
     group.roleKeys.add(normalizeTitle(title));
   }
+  const responsibility = item.responsibilityLabel || positionResponsibilityLabel(title, item.role);
   if (item.committee && !group.committees.includes(item.committee)) group.committees.push(item.committee);
+  if (responsibility && !group.responsibilityLabels.includes(responsibility)) group.responsibilityLabels.push(responsibility);
   if (item.responsibilities && !group.responsibilities.includes(item.responsibilities)) group.responsibilities.push(item.responsibilities);
   if (item.id && !group.assignmentIds.includes(item.id)) group.assignmentIds.push(item.id);
+  group.termStartDate = group.termStartDate || item.termStartDate || item.term_start_date || "";
+  group.termEndDate = group.termEndDate || item.termEndDate || item.term_end_date || "";
   group.hasExecutiveRole = group.hasExecutiveRole || isExecutiveRole(title, item);
 }
 
@@ -573,8 +646,11 @@ function buildOfficerDirectory() {
         roles: [],
         roleKeys: new Set(),
         committees: [],
+        responsibilityLabels: [],
         responsibilities: [],
         assignmentIds: [],
+        termStartDate: "",
+        termEndDate: "",
         hasExecutiveRole: false
       });
     }
@@ -592,11 +668,8 @@ function buildOfficerDirectory() {
     if (group) addOfficerRole(group, { id: `member-role:${member.id}:${member.officerRole}`, assignedMember: member.id, role: member.officerRole, committee: member.committee });
   });
 
-  const groups = [...byMember.values()].map((group) => ({ ...group, roleKeys: undefined }));
-  const executiveOfficers = groups.filter((group) => group.hasExecutiveRole).sort((a, b) => memberName(a.memberId).localeCompare(memberName(b.memberId)));
-  const executiveMemberIds = new Set(executiveOfficers.map((group) => group.memberId));
-  const otherOfficers = groups.filter((group) => !executiveMemberIds.has(group.memberId)).sort((a, b) => memberName(a.memberId).localeCompare(memberName(b.memberId)));
-  return { executiveOfficers, otherOfficers, allOfficers: groups };
+  const groups = [...byMember.values()].map((group) => ({ ...group, roleKeys: undefined })).sort((a, b) => memberName(a.memberId).localeCompare(memberName(b.memberId)));
+  return { executiveOfficers: groups, otherOfficers: [], allOfficers: groups };
 }
 
 const collectionMeta = {
@@ -693,6 +766,7 @@ function render() {
     recruitment: () => renderCollection("pnms"),
     events: () => renderCollection("events"),
     finance: () => renderCollection("finance"),
+    kpis: renderKpiReports,
     tasks: () => renderCollection("tasks"),
     leadership: renderLeadership,
     reports: renderReports,
@@ -1044,8 +1118,8 @@ function renderTreasurerDashboard() {
   </section>`;
 }
 
-function mini(label, value) {
-  return `<button class="mini-card" data-go="finance"><span>${label}</span><strong>${value}</strong></button>`;
+function mini(label, value, view = "finance") {
+  return `<button class="mini-card" data-go="${safe(view)}"><span>${label}</span><strong>${value}</strong></button>`;
 }
 
 function renderRecruitmentSummary() {
@@ -1071,12 +1145,11 @@ function renderLeadership() {
   const directory = buildOfficerDirectory();
   const hasRows = directory.allOfficers.length;
   return `<section class="panel">
-    <div class="panel-head"><div><p class="eyebrow">Officers and committees</p><h3>Leadership assignments</h3></div><button class="primary" data-add-leadership>Add officer / committee role</button></div>
+    <div class="panel-head"><div><p class="eyebrow">Executive Team</p><h3>Alpha Omega executive leadership</h3><p class="muted">Every active officer assignment is treated as an Executive Team position. VPMD is the formal title; Brotherhood is its responsibility label, not Recruitment.</p></div><button class="primary" data-add-leadership>Add executive role</button></div>
     ${hasRows ? `
-      ${renderOfficerSection("Executive Officers", directory.executiveOfficers, "Executive positions are controlled in Settings. Each executive member appears once here.")}
-      ${renderOfficerSection("Other Chapter Officers", directory.otherOfficers, "Non-executive officers appear here unless they are already listed as executive officers.")}
+      ${renderOfficerSection("Executive Team", directory.executiveOfficers, "Each Executive Team member appears once, with all assigned executive titles on one card.")}
       ${renderLeadershipRoster()}
-    ` : `<div class="empty-state"><h3>No officer roles assigned yet.</h3><p>Add the Treasurer, President, Assistant Treasurer, and other roles once the real roster is entered.</p><button class="primary" data-add-leadership>Add first role</button></div>`}
+    ` : `<div class="empty-state"><h3>No Executive Team roles assigned yet.</h3><p>Add real Alpha Omega executive roles once the roster is entered. No demo officers are seeded.</p><button class="primary" data-add-leadership>Add first executive role</button></div>`}
   </section>`;
 }
 
@@ -1089,10 +1162,17 @@ function renderOfficerSection(title, officers, emptyText) {
 }
 
 function renderOfficerCard(officer) {
+  const primaryRole = officer.roles[0] || "Executive Team";
+  const member = officer.member || state.members.find((m) => m.id === officer.memberId) || {};
+  const term = [officer.termStartDate || officer.term_start_date, officer.termEndDate || officer.term_end_date].filter(Boolean).join(" – ");
   return `<article class="profile-card" data-open="members" data-id="${safe(officer.memberId)}">
-    <p class="eyebrow">${safe(officer.committees.join(" · ") || "Chapter leadership")}</p>
+    <p class="eyebrow">${safe(officer.responsibilityLabels.join(" · ") || "Executive Team")}</p>
     <h3>${safe(memberName(officer.memberId) || "Unassigned")}</h3>
-    <p><strong>${safe(officer.roles.join(", "))}</strong></p>
+    <p><strong>${safe(officer.roles.map((role) => displayPosition(role)).join(", "))}</strong></p>
+    <p class="muted">${safe(positionFullTitle(primaryRole))}</p>
+    <p>${safe([member.email, member.phone].filter(Boolean).join(" · ") || "No contact info on member profile")}</p>
+    ${term ? `<p class="muted">Term: ${safe(term)}</p>` : ""}
+    <p><span class="status-pill">${safe(member.memberStatus || member.lifecycle || "Active")}</span></p>
     ${officer.responsibilities.length ? `<p>${safe(officer.responsibilities[0])}</p>` : ""}
     <div class="button-row">
       <button class="ghost small" data-open="members" data-id="${safe(officer.memberId)}">Open profile</button>
@@ -1125,19 +1205,393 @@ function renderReports() {
       ${mini("Outstanding balances", money(m.outstanding))}
       ${mini("Payment history", state.finance.filter((f) => f.type === "Payment").length)}
       ${mini("Attendance records", state.attendance.length)}
-      ${mini("Executive officers", officerDirectory.executiveOfficers.length)}
-      ${mini("Other officers", officerDirectory.otherOfficers.length)}
+      ${mini("Executive Team", officerDirectory.executiveOfficers.length)}
+      ${mini("KPI meetings", state.kpiMeetings.length)}
       ${mini("Open officer tasks", m.tasks)}
     </div>
     <div class="two-col">
-      ${reportBlock("Executive officers", officerDirectory.executiveOfficers.map((o) => `${memberName(o.memberId)}: ${o.roles.join(", ")}`))}
-      ${reportBlock("Other chapter officers", officerDirectory.otherOfficers.map((o) => `${memberName(o.memberId)}: ${o.roles.join(", ")}`))}
+      ${reportBlock("Executive Team", officerDirectory.executiveOfficers.map((o) => `${memberName(o.memberId)}: ${o.roles.map((r) => displayPosition(r)).join(", ")}`))}
+      ${reportBlock("KPI reporting", (state.kpiMeetings || []).slice(0, 10).map((meeting) => `${meeting.title || "KPI Meeting"} · ${meeting.meetingDate || ""} · ${meeting.status || "Draft"}`))}
       ${reportBlock("Outstanding balances", activeMembers().map((m) => ({ name: memberName(m.id), ...memberFinance(m.id) })).filter((x) => x.balance > 0).map((x) => `${x.name}: ${money(x.balance)} · ${x.status}`))}
       ${reportBlock("Payment history", financeRows().filter((f) => f.type === "Payment").slice(0, 25).map((f) => `${memberName(f.memberId)} · ${money(f.amount)} · ${f.paymentDate || ""}`))}
       ${reportBlock("Attendance report", state.attendance.slice(0, 25).map((a) => `${eventName(a.eventId)} · ${a.personType === "Member" ? memberName(a.personId) : pnmName(a.personId)} · ${a.status}`))}
       ${reportBlock("Officer task report", openTasks().slice(0, 25).map((t) => `${t.title} · ${t.status} · due ${t.dueDate || "not set"}`))}
     </div>
   </section>`;
+}
+
+function activeExecutivePositions() {
+  const byPosition = new Map();
+  buildOfficerDirectory().executiveOfficers.forEach((officer) => {
+    officer.roles.forEach((role) => {
+      const position = canonicalPositionTitle(role);
+      if (!position || position === "General member") return;
+      if (!byPosition.has(position)) {
+        byPosition.set(position, {
+          position,
+          label: displayPosition(position),
+          fullTitle: positionFullTitle(position),
+          responsibilityLabel: positionResponsibilityLabel(position),
+          officerMemberIds: [],
+          officers: []
+        });
+      }
+      const row = byPosition.get(position);
+      if (!row.officerMemberIds.includes(officer.memberId)) row.officerMemberIds.push(officer.memberId);
+      if (!row.officers.find((o) => o.memberId === officer.memberId)) row.officers.push(officer);
+    });
+  });
+  return [...byPosition.values()].sort((a, b) => a.position.localeCompare(b.position));
+}
+
+function renderKpiReports() {
+  if (!can("view_all") && !can("view_reports") && !can("all")) return restrictedPanel("KPI Reports are restricted to approved Executive Team, President, Admin, Secretary, and advisor/reporting roles.");
+  const meetings = [...(state.kpiMeetings || [])].filter((m) => m.status !== "Archived").sort((a, b) => String(b.meetingDate || b.meeting_date || "").localeCompare(String(a.meetingDate || a.meeting_date || "")));
+  const selectedId = activeFilters.kpis?.meetingId || meetings[0]?.id || "";
+  const meeting = meetings.find((m) => m.id === selectedId);
+  return `<section class="panel kpi-page printable">
+    <div class="panel-head">
+      <div><p class="eyebrow">KPI Reports</p><h3>Recurring chapter KPI meeting reports</h3><p class="muted">One report section is generated per active Executive Team position. VPMD and Brotherhood share one section: VPMD — Brotherhood. Recruitment stays separate.</p></div>
+      <div class="button-row">
+        ${canManageKpis() ? `<button class="primary" data-create-kpi-meeting>Create KPI meeting</button><button class="ghost" data-add-kpi-definition>Add KPI</button>` : ""}
+        <button class="ghost" data-export="kpis">Export KPI CSV</button>
+        <button class="ghost" data-print>Print / PDF</button>
+      </div>
+    </div>
+    ${meetings.length ? renderKpiMeetingPicker(meetings, selectedId) : ""}
+    ${meeting ? renderSelectedKpiMeeting(meeting) : renderKpiEmptyState()}
+  </section>`;
+}
+
+function renderKpiEmptyState() {
+  const positions = activeExecutivePositions();
+  return `<div class="empty-state"><h3>No KPI meetings created yet.</h3><p>Create the first real KPI meeting when Alpha Omega is ready. No demo KPI meetings or fake reports are seeded.</p><p class="muted">${positions.length ? `${positions.length} Executive Team positions are ready for report sections.` : "Add Executive Team roles first so meeting sections can be generated."}</p><div class="button-row centered">${canManageKpis() ? `<button class="primary" data-create-kpi-meeting>Create first KPI meeting</button><button class="ghost" data-go="leadership">Review Executive Team</button>` : `<button class="ghost" data-go="leadership">Review Executive Team</button>`}</div></div>`;
+}
+
+function renderKpiMeetingPicker(meetings, selectedId) {
+  return `<div class="button-row kpi-picker">
+    <label>Selected meeting<select id="kpiMeetingSelect">${meetings.map((m) => `<option value="${safe(m.id)}" ${m.id === selectedId ? "selected" : ""}>${safe(m.title || "KPI meeting")} · ${safe(m.meetingDate || "")}</option>`).join("")}</select></label>
+    ${selectedId ? `<button class="ghost" data-copy-kpi-meeting="${safe(selectedId)}">Copy as next meeting</button>` : ""}
+  </div>`;
+}
+
+function renderSelectedKpiMeeting(meeting) {
+  ensureKpiReportsForMeeting(meeting, false);
+  const reports = kpiReportsForMeeting(meeting.id);
+  const summary = kpiMeetingSummary(meeting.id);
+  return `<section class="kpi-meeting">
+    <div class="notice">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">${safe(meeting.status || "Draft")}</p>
+          <h3>${safe(meeting.title || "KPI Meeting")}</h3>
+          <p class="muted">Meeting date: ${safe(meeting.meetingDate || "Not set")} · Reporting period: ${safe(meeting.reportingPeriodStart || "—")} to ${safe(meeting.reportingPeriodEnd || "—")}</p>
+        </div>
+        ${canManageKpis() ? `<button class="ghost" data-edit-kpi-meeting="${safe(meeting.id)}">Edit meeting</button>` : ""}
+      </div>
+    </div>
+    <div class="mini-grid">
+      ${mini("Reports completed", `${summary.completedReports} of ${summary.totalReports}`, "kpis")}
+      ${mini("Reports missing", summary.missingReports, "kpis")}
+      ${mini("KPIs On Track", summary.onTrack, "kpis")}
+      ${mini("KPIs At Risk", summary.atRisk, "kpis")}
+      ${mini("KPIs Off Track", summary.offTrack, "kpis")}
+      ${mini("Overdue actions", summary.overdueActions, "kpis")}
+      ${mini("Due this week", summary.actionsDueThisWeek, "kpis")}
+      ${mini("Meeting readiness", `${summary.readiness}%`, "kpis")}
+    </div>
+    ${renderKpiMeetingTable(meeting, reports)}
+    ${renderKpiDefinitionsPanel()}
+    ${renderKpiHistory(meeting.id)}
+  </section>`;
+}
+
+function renderKpiMeetingTable(meeting, reports) {
+  if (!reports.length) return `<div class="empty-state"><h3>No Executive Team positions found.</h3><p>Add Executive Team roles before generating KPI report sections.</p><button class="primary" data-go="leadership">Open Executive Team</button></div>`;
+  return `<section class="leadership-section">
+    <div class="section-head"><h4>Position report sections</h4><p>One row per executive position. VPMD — Brotherhood and Recruitment are separate rows.</p></div>
+    <div class="table-wrap"><table><thead><tr><th>Executive Position</th><th>Officer</th><th>Report Status</th><th>On Track</th><th>At Risk</th><th>Off Track</th><th>Blockers</th><th>Follow-Up Actions</th><th>Last Updated</th><th>Actions</th></tr></thead><tbody>
+      ${reports.map((report) => renderKpiReportRow(meeting, report)).join("")}
+    </tbody></table></div>
+  </section>`;
+}
+
+function renderKpiReportRow(meeting, report) {
+  const results = state.kpiResults.filter((r) => r.positionReportId === report.id);
+  const actions = state.kpiActionItems.filter((a) => a.positionReportId === report.id && a.status !== "Completed" && a.status !== "Cancelled");
+  const officerNames = (report.officerMemberIds || [report.officerMemberId]).filter(Boolean).map(memberName).filter(Boolean).join(", ") || "Unassigned";
+  return `<tr data-open-kpi-report="${safe(report.id)}">
+    <td data-label="Executive Position"><strong>${safe(displayPosition(report.position))}</strong></td>
+    <td data-label="Officer">${safe(officerNames)}</td>
+    <td data-label="Report Status"><span class="status-pill">${safe(report.status || "Draft")}</span></td>
+    <td data-label="On Track">${results.filter((r) => r.status === "On Track").length}</td>
+    <td data-label="At Risk">${results.filter((r) => r.status === "At Risk").length}</td>
+    <td data-label="Off Track">${results.filter((r) => r.status === "Off Track").length}</td>
+    <td data-label="Blockers">${safe(report.biggestBlocker || "—")}</td>
+    <td data-label="Follow-Up Actions">${actions.length}</td>
+    <td data-label="Last Updated">${safe(report.updatedAt ? new Date(report.updatedAt).toLocaleString() : "—")}</td>
+    <td data-label="Actions"><div class="row-actions"><button class="small ghost" data-open-kpi-report="${safe(report.id)}">Open report</button></div></td>
+  </tr>`;
+}
+
+function renderKpiDefinitionsPanel() {
+  const definitions = (state.kpiDefinitions || []).filter((k) => k.isActive !== false).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+  return `<section class="leadership-section">
+    <div class="section-head"><h4>Configured KPIs</h4><p>Authorized users can add configurable KPIs by executive position. Historical report results retain the KPI name and target snapshot.</p></div>
+    ${definitions.length ? `<div class="table-wrap"><table><thead><tr><th>Position</th><th>KPI</th><th>Type</th><th>Target</th><th>Direction</th><th>Status</th></tr></thead><tbody>${definitions.map((k) => `<tr><td data-label="Position">${safe(displayPosition(k.position))}</td><td data-label="KPI">${safe(k.name)}</td><td data-label="Type">${safe(k.valueType)}</td><td data-label="Target">${safe(k.targetValue || "—")}</td><td data-label="Direction">${safe(k.direction || "Informational")}</td><td data-label="Status">${k.isActive === false ? "Inactive" : "Active"}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state"><h3>No KPIs configured yet.</h3><p>Add real KPIs when the Executive Team decides what to track. Meetings can still be created first.</p>${canManageKpis() ? `<button class="primary" data-add-kpi-definition>Add first KPI</button>` : ""}</div>`}
+  </section>`;
+}
+
+function renderKpiHistory(selectedId) {
+  const meetings = (state.kpiMeetings || []).filter((m) => m.id !== selectedId && m.status !== "Archived").sort((a, b) => String(b.meetingDate || "").localeCompare(String(a.meetingDate || ""))).slice(0, 8);
+  return `<section class="leadership-section">
+    <div class="section-head"><h4>Meeting history</h4><p>Open previous KPI meetings, compare periods, or copy a previous meeting to start the next one.</p></div>
+    ${meetings.length ? `<div class="stack-list">${meetings.map((m) => `<button class="stack-item" data-select-kpi-meeting="${safe(m.id)}">${safe(m.title || "KPI Meeting")}<span>${safe(m.meetingDate || "")} · ${safe(m.status || "Draft")}</span></button>`).join("")}</div>` : emptySmall("No previous KPI meetings yet.")}
+  </section>`;
+}
+
+function canManageKpis() {
+  return can("all") || ["Admin", "President", "Secretary", "Exec Board"].includes(state.settings.currentRole || cloud.profile?.role);
+}
+
+function canEditKpiReport(report) {
+  if (canManageKpis()) return true;
+  if (["Treasurer", "Assistant Treasurer", "Exec Board", "Committee Chair"].includes(state.settings.currentRole || cloud.profile?.role)) return true;
+  return (report.officerMemberIds || [report.officerMemberId]).includes(cloud.profile?.member_id || cloud.profile?.memberId || "");
+}
+
+function kpiReportsForMeeting(meetingId) {
+  return (state.kpiPositionReports || []).filter((r) => r.kpiMeetingId === meetingId && r.status !== "Archived").sort((a, b) => a.position.localeCompare(b.position));
+}
+
+function kpiMeetingSummary(meetingId) {
+  const reports = kpiReportsForMeeting(meetingId);
+  const results = state.kpiResults.filter((r) => reports.some((report) => report.id === r.positionReportId));
+  const actions = state.kpiActionItems.filter((a) => a.kpiMeetingId === meetingId && a.status !== "Completed" && a.status !== "Cancelled");
+  const weekEnd = new Date();
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  const completedReports = reports.filter((r) => r.status === "Submitted" || r.status === "Completed").length;
+  return {
+    totalReports: reports.length,
+    completedReports,
+    missingReports: reports.length - completedReports,
+    onTrack: results.filter((r) => r.status === "On Track").length,
+    atRisk: results.filter((r) => r.status === "At Risk").length,
+    offTrack: results.filter((r) => r.status === "Off Track").length,
+    overdueActions: actions.filter((a) => a.dueDate && a.dueDate < todayIso()).length,
+    actionsDueThisWeek: actions.filter((a) => a.dueDate && a.dueDate >= todayIso() && a.dueDate <= weekEnd.toISOString().slice(0, 10)).length,
+    readiness: reports.length ? Math.round((completedReports / reports.length) * 100) : 0
+  };
+}
+
+function ensureKpiReportsForMeeting(meeting, mutate = true) {
+  const existingPositions = new Set(kpiReportsForMeeting(meeting.id).map((r) => canonicalPositionTitle(r.position)));
+  const created = activeExecutivePositions().filter((p) => !existingPositions.has(p.position)).map((p) => ({
+    id: uid("kpir"),
+    kpiMeetingId: meeting.id,
+    position: p.position,
+    positionLabel: displayPosition(p.position),
+    officerMemberId: p.officerMemberIds[0] || "",
+    officerMemberIds: p.officerMemberIds,
+    overallUpdate: "",
+    mainAccomplishment: "",
+    biggestBlocker: "",
+    nextPriority: "",
+    status: "Draft",
+    submittedAt: "",
+    submittedBy: "",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }));
+  if (mutate && created.length) state.kpiPositionReports.unshift(...created);
+  return created;
+}
+
+function openKpiMeetingForm(id = "") {
+  const existing = state.kpiMeetings.find((m) => m.id === id);
+  openModal(`<h3>${existing ? "Edit KPI meeting" : "Create KPI meeting"}</h3><form id="kpiMeetingForm" class="form-grid">
+    <label class="wide">Title<input name="title" value="${safe(existing?.title || `KPI Meeting ${todayIso()}`)}" required /></label>
+    <label>Meeting date<input name="meetingDate" type="date" value="${safe(existing?.meetingDate || todayIso())}" required /></label>
+    <label>Status<select name="status">${["Draft", "Open", "Completed", "Archived"].map((s) => `<option ${existing?.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></label>
+    <label>Reporting period start<input name="reportingPeriodStart" type="date" value="${safe(existing?.reportingPeriodStart || "")}" /></label>
+    <label>Reporting period end<input name="reportingPeriodEnd" type="date" value="${safe(existing?.reportingPeriodEnd || "")}" /></label>
+    <div class="wide notice"><strong>Generated sections</strong><p>Saving creates one report section per active Executive Team position. VPMD/Brotherhood is one section; Recruitment is separate.</p></div>
+    <div class="wide button-row"><button class="primary">Save meeting</button><button class="ghost" type="button" data-close-modal>Cancel</button></div>
+  </form>`);
+  document.getElementById("kpiMeetingForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const form = Object.fromEntries(new FormData(ev.currentTarget).entries());
+    const now = new Date().toISOString();
+    snapshot(existing ? "KPI meeting edited" : "KPI meeting created", { type: "kpis", id });
+    const meeting = existing || { id: uid("kpim"), createdBy: cloud.user?.id || "", createdAt: now };
+    Object.assign(meeting, form, { updatedAt: now });
+    if (!existing) state.kpiMeetings.unshift(meeting);
+    ensureKpiReportsForMeeting(meeting, true);
+    activeFilters.kpis = { meetingId: meeting.id };
+    await persistWorkspace("KPI meeting saved to Supabase.");
+    closeModal();
+    render();
+  });
+}
+
+function openKpiDefinitionForm(id = "") {
+  const existing = state.kpiDefinitions.find((k) => k.id === id);
+  const positions = activeExecutivePositions();
+  openModal(`<h3>${existing ? "Edit KPI" : "Add configurable KPI"}</h3><form id="kpiDefinitionForm" class="form-grid">
+    <label>Executive position<select name="position">${positions.map((p) => `<option value="${safe(p.position)}" ${existing?.position === p.position ? "selected" : ""}>${safe(displayPosition(p.position))}</option>`).join("")}</select></label>
+    <label>KPI name<input name="name" value="${safe(existing?.name || "")}" required /></label>
+    <label class="wide">Description<textarea name="description">${safe(existing?.description || "")}</textarea></label>
+    <label>Value type<select name="valueType">${["Number", "Currency", "Percentage", "Text", "Yes/No"].map((v) => `<option ${existing?.valueType === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <label>Target<input name="targetValue" value="${safe(existing?.targetValue || "")}" /></label>
+    <label>Improvement direction<select name="direction">${["Higher is better", "Lower is better", "Target range", "Informational only"].map((v) => `<option ${existing?.direction === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <label>Display order<input name="displayOrder" type="number" value="${safe(existing?.displayOrder ?? 0)}" /></label>
+    <label>Active<select name="isActive"><option value="true" ${existing?.isActive !== false ? "selected" : ""}>Active</option><option value="false" ${existing?.isActive === false ? "selected" : ""}>Inactive</option></select></label>
+    <div class="wide button-row"><button class="primary">Save KPI</button><button class="ghost" type="button" data-close-modal>Cancel</button></div>
+  </form>`);
+  document.getElementById("kpiDefinitionForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const form = Object.fromEntries(new FormData(ev.currentTarget).entries());
+    const now = new Date().toISOString();
+    const row = { ...form, position: canonicalPositionTitle(form.position), isActive: form.isActive === "true", displayOrder: Number(form.displayOrder || 0), updatedAt: now };
+    snapshot(existing ? "KPI definition edited" : "KPI definition added", { type: "kpis", id });
+    if (existing) Object.assign(existing, row); else state.kpiDefinitions.unshift({ id: uid("kpid"), ...row, createdAt: now });
+    await persistWorkspace("KPI definition saved to Supabase.");
+    closeModal();
+    render();
+  });
+}
+
+function openKpiReportForm(reportId) {
+  const report = state.kpiPositionReports.find((r) => r.id === reportId);
+  if (!report) return toast("KPI report section not found.");
+  const editable = canEditKpiReport(report);
+  const definitions = state.kpiDefinitions.filter((k) => k.isActive !== false && canonicalPositionTitle(k.position) === canonicalPositionTitle(report.position)).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+  const resultFor = (definition) => state.kpiResults.find((r) => r.positionReportId === report.id && r.kpiDefinitionId === definition.id) || {};
+  const actions = state.kpiActionItems.filter((a) => a.positionReportId === report.id && a.status !== "Cancelled");
+  openModal(`<h3>${safe(displayPosition(report.position))} KPI report</h3>
+    <p class="muted">${safe((report.officerMemberIds || [report.officerMemberId]).filter(Boolean).map(memberName).join(", ") || "Unassigned")}</p>
+    <form id="kpiReportForm" class="form-grid">
+      <label class="wide">Overall update<textarea name="overallUpdate" ${editable ? "" : "disabled"}>${safe(report.overallUpdate || "")}</textarea></label>
+      <label class="wide">Main accomplishment<textarea name="mainAccomplishment" ${editable ? "" : "disabled"}>${safe(report.mainAccomplishment || "")}</textarea></label>
+      <label class="wide">Biggest blocker<textarea name="biggestBlocker" ${editable ? "" : "disabled"}>${safe(report.biggestBlocker || "")}</textarea></label>
+      <label class="wide">Main priority before next meeting<textarea name="nextPriority" ${editable ? "" : "disabled"}>${safe(report.nextPriority || "")}</textarea></label>
+      <h4 class="wide">KPI results</h4>
+      ${definitions.length ? definitions.map((definition) => renderKpiResultInputs(definition, resultFor(definition), editable, report.id)).join("") : `<div class="wide empty-state"><h3>No KPIs configured for ${safe(displayPosition(report.position))}.</h3><p>Add configurable KPIs when the Executive Team decides what to track.</p></div>`}
+      <h4 class="wide">Follow-up action</h4>
+      <label>Action title<input name="actionTitle" ${editable ? "" : "disabled"} /></label>
+      <label>Owner<select name="actionOwner" ${editable ? "" : "disabled"}><option value="">Unassigned</option>${selectOptions("members").map(([v,t]) => `<option value="${safe(v)}">${safe(t)}</option>`).join("")}</select></label>
+      <label>Due date<input name="actionDueDate" type="date" ${editable ? "" : "disabled"} /></label>
+      <label>Status<select name="actionStatus" ${editable ? "" : "disabled"}>${["Not Started", "In Progress", "Blocked", "Completed", "Cancelled"].map((s) => `<option>${s}</option>`).join("")}</select></label>
+      <label class="wide">Action description<textarea name="actionDescription" ${editable ? "" : "disabled"}></textarea></label>
+      ${actions.length ? `<div class="wide notice"><h4>Existing follow-up actions</h4><ul>${actions.map((a) => `<li>${safe(a.title)} · ${safe(a.status)} · ${safe(a.dueDate || "no due date")} · ${safe(memberName(a.assignedMemberId) || "Unassigned")}</li>`).join("")}</ul></div>` : ""}
+      <div class="wide button-row">${editable ? `<button class="primary" name="saveMode" value="Draft">Save draft</button><button class="ghost" name="saveMode" value="Submitted">Submit report</button>` : ""}<button class="ghost" type="button" data-close-modal>Close</button></div>
+    </form>`);
+  document.getElementById("kpiReportForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    await saveKpiReport(report, Object.fromEntries(new FormData(ev.currentTarget).entries()), definitions, ev.submitter?.value || "Draft");
+  });
+}
+
+function renderKpiResultInputs(definition, result, editable, reportId) {
+  const previous = previousKpiResult(definition.id, definition.position, reportId)?.actualValue || "";
+  return `<div class="wide notice kpi-result-editor"><h4>${safe(definition.name)}</h4><p class="muted">${safe(definition.description || "")}</p><div class="form-grid">
+    <label>Target<input value="${safe(definition.targetValue || "")}" disabled /></label>
+    <label>Previous result<input value="${safe(previous || result.previousValue || "")}" disabled /></label>
+    <label>Actual result<input name="actual_${safe(definition.id)}" value="${safe(result.actualValue || "")}" ${editable ? "" : "disabled"} /></label>
+    <label>Status<select name="status_${safe(definition.id)}" ${editable ? "" : "disabled"}>${["Not Reported", "On Track", "At Risk", "Off Track", "Completed"].map((s) => `<option ${result.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></label>
+    <label class="wide">Notes<textarea name="notes_${safe(definition.id)}" ${editable ? "" : "disabled"}>${safe(result.notes || "")}</textarea></label>
+  </div></div>`;
+}
+
+function previousKpiResult(definitionId, position, currentReportId = "") {
+  const report = state.kpiPositionReports.find((r) => r.id === currentReportId);
+  const currentMeeting = state.kpiMeetings.find((m) => m.id === report?.kpiMeetingId);
+  const priorMeetings = state.kpiMeetings
+    .filter((m) => m.id !== currentMeeting?.id && (m.meetingDate || "") < (currentMeeting?.meetingDate || "9999-12-31"))
+    .sort((a, b) => String(b.meetingDate || "").localeCompare(String(a.meetingDate || "")));
+  for (const meeting of priorMeetings) {
+    const priorReport = state.kpiPositionReports.find((r) => r.kpiMeetingId === meeting.id && canonicalPositionTitle(r.position) === canonicalPositionTitle(position));
+    const priorResult = state.kpiResults.find((r) => r.positionReportId === priorReport?.id && r.kpiDefinitionId === definitionId);
+    if (priorResult) return priorResult;
+  }
+  return null;
+}
+
+async function saveKpiReport(report, form, definitions, status) {
+  const now = new Date().toISOString();
+  Object.assign(report, {
+    overallUpdate: form.overallUpdate || "",
+    mainAccomplishment: form.mainAccomplishment || "",
+    biggestBlocker: form.biggestBlocker || "",
+    nextPriority: form.nextPriority || "",
+    status,
+    submittedAt: status === "Submitted" ? now : report.submittedAt || "",
+    submittedBy: status === "Submitted" ? cloud.user?.id || "" : report.submittedBy || "",
+    updatedAt: now
+  });
+  definitions.forEach((definition) => {
+    const existing = state.kpiResults.find((r) => r.positionReportId === report.id && r.kpiDefinitionId === definition.id);
+    const previous = previousKpiResult(definition.id, definition.position, report.id);
+    const row = {
+      positionReportId: report.id,
+      kpiDefinitionId: definition.id,
+      kpiNameSnapshot: definition.name,
+      targetValue: definition.targetValue || "",
+      actualValue: form[`actual_${definition.id}`] || "",
+      previousValue: previous?.actualValue || "",
+      status: form[`status_${definition.id}`] || "Not Reported",
+      notes: form[`notes_${definition.id}`] || "",
+      updatedAt: now
+    };
+    if (existing) Object.assign(existing, row);
+    else state.kpiResults.unshift({ id: uid("kpirv"), ...row, createdAt: now });
+  });
+  if (form.actionTitle) {
+    state.kpiActionItems.unshift({
+      id: uid("kpia"),
+      kpiMeetingId: report.kpiMeetingId,
+      positionReportId: report.id,
+      title: form.actionTitle,
+      description: form.actionDescription || "",
+      assignedMemberId: form.actionOwner || "",
+      dueDate: form.actionDueDate || "",
+      status: form.actionStatus || "Not Started",
+      completedAt: form.actionStatus === "Completed" ? now : "",
+      createdBy: cloud.user?.id || "",
+      createdAt: now,
+      updatedAt: now
+    });
+  }
+  snapshot(status === "Submitted" ? "KPI report submitted" : "KPI report draft saved", { type: "kpis", id: report.id, description: displayPosition(report.position) });
+  await persistWorkspace(status === "Submitted" ? "KPI report submitted to Supabase." : "KPI draft saved to Supabase.");
+  closeModal();
+  render();
+}
+
+async function copyKpiMeeting(id) {
+  const source = state.kpiMeetings.find((m) => m.id === id);
+  if (!source) return toast("KPI meeting not found.");
+  const now = new Date().toISOString();
+  const copy = { ...source, id: uid("kpim"), title: `Copy of ${source.title || "KPI Meeting"}`, status: "Draft", meetingDate: todayIso(), createdAt: now, updatedAt: now, createdBy: cloud.user?.id || "" };
+  state.kpiMeetings.unshift(copy);
+  ensureKpiReportsForMeeting(copy, true);
+  const unresolved = state.kpiActionItems.filter((a) => a.kpiMeetingId === id && !["Completed", "Cancelled"].includes(a.status));
+  if (unresolved.length && confirm(`Carry forward ${unresolved.length} unresolved action items?`)) {
+    unresolved.forEach((a) => state.kpiActionItems.unshift({ ...a, id: uid("kpia"), kpiMeetingId: copy.id, positionReportId: "", createdAt: now, updatedAt: now }));
+  }
+  snapshot("KPI meeting copied", { type: "kpis", id });
+  await persistWorkspace("KPI meeting copied to Supabase.");
+  activeFilters.kpis = { meetingId: copy.id };
+  render();
+}
+
+async function persistWorkspace(successMessage = "Saved to Supabase.") {
+  save();
+  if (cloud.user) {
+    await syncCloudWorkspace(false);
+    await loadCloudWorkspace({ throwOnError: true });
+  }
+  toast(successMessage);
 }
 
 function reportBlock(title, lines) {
@@ -1160,8 +1614,8 @@ function renderSettings() {
       ${settingInput("duesDueDates", "Dues due dates")}
       <label>Current role<input value="${safe(cloud.profile?.role || state.settings.currentRole)}" disabled /></label>
       <label>Attendance threshold<input id="set_attendanceThreshold" type="number" min="0" max="100" value="${safe(state.settings.attendanceThreshold)}" /></label>
-      ${listSetting("officerRoles", "Officer roles")}
-      ${listSetting("executiveOfficerRoles", "Executive officer roles")}
+      ${listSetting("officerRoles", "Executive Team positions")}
+      ${listSetting("executiveOfficerRoles", "Executive Team positions treated as executive")}
       ${listSetting("memberStatuses", "Member statuses")}
       ${listSetting("eventTypes", "Event types")}
       ${listSetting("committees", "Committees")}
@@ -1243,6 +1697,13 @@ function bindViewActions(root) {
   root.querySelectorAll("[data-task-done]").forEach((el) => el.addEventListener("click", () => markTaskDone(el.dataset.taskDone)));
   root.querySelectorAll("[data-add-leadership]").forEach((el) => el.addEventListener("click", () => openLeadershipForm()));
   root.querySelectorAll("[data-edit-leadership]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); openLeadershipForm(el.dataset.editLeadership); }));
+  root.querySelectorAll("[data-create-kpi-meeting]").forEach((el) => el.addEventListener("click", () => openKpiMeetingForm()));
+  root.querySelectorAll("[data-edit-kpi-meeting]").forEach((el) => el.addEventListener("click", () => openKpiMeetingForm(el.dataset.editKpiMeeting)));
+  root.querySelectorAll("[data-add-kpi-definition]").forEach((el) => el.addEventListener("click", () => openKpiDefinitionForm()));
+  root.querySelectorAll("[data-open-kpi-report]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); openKpiReportForm(el.dataset.openKpiReport); }));
+  root.querySelectorAll("[data-copy-kpi-meeting]").forEach((el) => el.addEventListener("click", () => copyKpiMeeting(el.dataset.copyKpiMeeting)));
+  root.querySelectorAll("[data-select-kpi-meeting]").forEach((el) => el.addEventListener("click", () => { activeFilters.kpis = { meetingId: el.dataset.selectKpiMeeting }; render(); }));
+  root.querySelector("#kpiMeetingSelect")?.addEventListener("change", (ev) => { activeFilters.kpis = { meetingId: ev.target.value }; render(); });
   root.querySelectorAll("[data-user-action]").forEach((el) => el.addEventListener("click", () => {
     const [action, userId] = el.dataset.userAction.split(":");
     const role = root.querySelector(`[data-user-role="${userId}"]`)?.value;
@@ -1744,6 +2205,8 @@ function collectSettingsFromForm() {
     const el = document.getElementById(`set_${k}`);
     if (el) next[k] = el.value.split(",").map((x) => x.trim()).filter(Boolean);
   });
+  next.officerRoles = [...new Set((next.officerRoles || []).map(canonicalPositionTitle).filter(Boolean))];
+  next.executiveOfficerRoles = [...new Set([...(next.executiveOfficerRoles || []), ...(next.officerRoles || [])].map(canonicalPositionTitle).filter((role) => role && role !== "General member"))];
   next.setupComplete = Boolean(next.chapterName && next.schoolName && next.term && next.academicYear);
   return next;
 }
@@ -1831,11 +2294,18 @@ async function saveSettingsForm() {
 
 function openLeadershipForm(id) {
   const existing = state.leadership.find((l) => l.id === id);
-  const fields = [["role", "Role", "select", "officerRoles"], ["assignedMember", "Assigned member", "select", "members"], ["committee", "Committee", "select", "committees"], ["responsibilities", "Responsibilities", "textarea"], ["relatedReports", "Related reports", "text"]];
-  openModal(`<h3>${existing ? "Edit officer role" : "Add officer role"}</h3><form id="leadershipForm" class="form-grid">${fields.map((f) => formField(f, existing)).join("")}<div class="wide button-row"><button class="primary">Save</button><button class="ghost" type="button" data-close-modal>Cancel</button></div></form>`);
+  const normalizedExisting = existing ? { ...existing, role: canonicalPositionTitle(existing.role), responsibilityLabel: existing.responsibilityLabel || positionResponsibilityLabel(canonicalPositionTitle(existing.role), existing.role) } : null;
+  const fields = [["role", "Formal executive position", "select", "officerRoles"], ["assignedMember", "Assigned member", "select", "members"], ["responsibilityLabel", "Plain-language responsibility label", "text"], ["committee", "Committee", "select", "committees"], ["termStartDate", "Term start date", "date"], ["termEndDate", "Term end date", "date"], ["responsibilities", "Responsibilities", "textarea"], ["relatedReports", "Related reports", "text"]];
+  openModal(`<h3>${existing ? "Edit Executive Team role" : "Add Executive Team role"}</h3><form id="leadershipForm" class="form-grid">${fields.map((f) => formField(f, normalizedExisting)).join("")}<div class="wide notice"><strong>VPMD / Brotherhood rule</strong><p>Choose VPMD for the formal position. Use Brotherhood as the plain-language responsibility label. Recruitment stays separate.</p></div><div class="wide button-row"><button class="primary">Save</button><button class="ghost" type="button" data-close-modal>Cancel</button></div></form>`);
   document.getElementById("leadershipForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const row = Object.fromEntries(new FormData(ev.currentTarget).entries());
+    row.role = canonicalPositionTitle(row.role);
+    row.formalPosition = row.role;
+    row.fullPositionTitle = positionFullTitle(row.role);
+    row.responsibilityLabel = row.responsibilityLabel || positionResponsibilityLabel(row.role);
+    row.isExecutive = true;
+    row.is_executive = true;
     if (isDuplicateLeadershipAssignment(row, id)) return toast("That member already has this officer assignment.");
     snapshot(existing ? "Officer role edited" : "Officer role added", { type: "leadership", id });
     if (existing) Object.assign(existing, row); else state.leadership.unshift({ id: uid("l"), ...row });
@@ -2268,9 +2738,34 @@ function exportRows(key) {
     }));
   }
   if (key === "outstanding") return activeMembers().map((m) => ({ member: memberName(m.id), email: m.email, status: memberFinance(m.id).status, balance: memberFinance(m.id).balance, nextDue: memberFinance(m.id).nextDue })).filter((r) => r.balance > 0);
+  if (key === "kpis") {
+    const meetingId = activeFilters.kpis?.meetingId || state.kpiMeetings[0]?.id || "";
+    const meeting = state.kpiMeetings.find((m) => m.id === meetingId) || {};
+    const reports = kpiReportsForMeeting(meetingId);
+    return reports.flatMap((report) => {
+      const results = state.kpiResults.filter((r) => r.positionReportId === report.id);
+      const actions = state.kpiActionItems.filter((a) => a.positionReportId === report.id);
+      const base = {
+        meetingTitle: meeting.title || "",
+        meetingDate: meeting.meetingDate || "",
+        reportingPeriodStart: meeting.reportingPeriodStart || "",
+        reportingPeriodEnd: meeting.reportingPeriodEnd || "",
+        executivePosition: displayPosition(report.position),
+        officer: (report.officerMemberIds || [report.officerMemberId]).filter(Boolean).map(memberName).join(", "),
+        reportStatus: report.status || "Draft",
+        overallUpdate: report.overallUpdate || "",
+        mainAccomplishment: report.mainAccomplishment || "",
+        biggestBlocker: report.biggestBlocker || "",
+        nextPriority: report.nextPriority || ""
+      };
+      const resultRows = results.length ? results.map((r) => ({ ...base, rowType: "KPI Result", kpiName: r.kpiNameSnapshot || "", target: r.targetValue || "", actual: r.actualValue || "", previous: r.previousValue || "", kpiStatus: r.status || "Not Reported", notes: r.notes || "", actionTitle: "", actionOwner: "", actionDueDate: "", actionStatus: "" })) : [{ ...base, rowType: "Position Report", kpiName: "", target: "", actual: "", previous: "", kpiStatus: "", notes: "", actionTitle: "", actionOwner: "", actionDueDate: "", actionStatus: "" }];
+      const actionRows = actions.map((a) => ({ ...base, rowType: "Action Item", kpiName: "", target: "", actual: "", previous: "", kpiStatus: "", notes: a.description || "", actionTitle: a.title || "", actionOwner: memberName(a.assignedMemberId) || "", actionDueDate: a.dueDate || "", actionStatus: a.status || "" }));
+      return [...resultRows, ...actionRows];
+    });
+  }
   if (key === "reports") {
     const officerDirectory = buildOfficerDirectory();
-    return [{ report: "Member count", value: metrics().members }, { report: "Executive officers", value: officerDirectory.executiveOfficers.length }, { report: "Other officers", value: officerDirectory.otherOfficers.length }, { report: "Total dues billed", value: metrics().totalBilled }, { report: "Total collected", value: metrics().totalCollected }, { report: "Outstanding", value: metrics().outstanding }, { report: "Open tasks", value: metrics().tasks }];
+    return [{ report: "Member count", value: metrics().members }, { report: "Executive Team members", value: officerDirectory.executiveOfficers.length }, { report: "Total dues billed", value: metrics().totalBilled }, { report: "Total collected", value: metrics().totalCollected }, { report: "Outstanding", value: metrics().outstanding }, { report: "Open tasks", value: metrics().tasks }];
   }
   if (key === "attendance") return state.attendance;
   return (state[key] || filteredRows(key)).map((r) => ({ ...r, memberName: r.memberId ? memberName(r.memberId) : "" }));
