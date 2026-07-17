@@ -49,6 +49,7 @@ let historyStack = [];
 let cloud = { client: null, user: null, profile: null, profiles: [], organizationId: localStorage.getItem(orgStoreKey) };
 let state = load();
 let setupSave = { saving: false, error: "", success: "", fieldErrors: {} };
+let importState = { importing: false, result: null, error: "", rows: [], target: "", validation: null };
 
 const can = (permission) => roleRules[state.settings.currentRole]?.includes("all") || roleRules[state.settings.currentRole]?.includes(permission);
 const canManage = (area) => can("all") || can(`manage_${area}`);
@@ -76,6 +77,10 @@ function logSupabaseError(scope, err) {
     details: err?.details || "",
     hint: err?.hint || ""
   });
+}
+
+function importDebug(...args) {
+  console.info("[ChapterOps import]", ...args);
 }
 
 function emptyWorkspace() {
@@ -342,7 +347,8 @@ async function syncCloudWorkspace(showToast = true) {
   }
 }
 
-const activeMembers = () => state.members.filter((m) => !m.archived && m.lifecycle !== "Archived" && m.memberStatus !== "Archived");
+const uniqueMembersById = (members = []) => [...new Map(members.filter((m) => m?.id).map((m) => [m.id, m])).values()];
+const activeMembers = () => uniqueMembersById(state.members).filter((m) => !m.archived && m.lifecycle !== "Archived" && m.memberStatus !== "Archived");
 const memberName = (id) => state.members.find((m) => m.id === id) ? `${state.members.find((m) => m.id === id).firstName} ${state.members.find((m) => m.id === id).lastName}` : "";
 const pnmName = (id) => state.pnms.find((p) => p.id === id) ? `${state.pnms.find((p) => p.id === id).firstName} ${state.pnms.find((p) => p.id === id).lastName}` : "";
 const eventName = (id) => state.events.find((e) => e.id === id)?.name || "";
@@ -735,6 +741,7 @@ function actionAllowed(key) {
 function filteredRows(key) {
   const q = (activeFilters[key]?.q || "").toLowerCase();
   let rows = (state[key] || []).filter((r) => !r.archived && r.status !== "Archived" && r.lifecycle !== "Archived");
+  if (key === "members") rows = uniqueMembersById(rows);
   if (key === "finance" && activeFilters[key]?.outstanding) rows = activeMembers().map((m) => ({ ...memberFinance(m.id), id: m.id, memberId: m.id, type: "Member balance", amount: memberFinance(m.id).charges, balanceAfter: memberFinance(m.id).balance, status: memberFinance(m.id).status, dueDate: memberFinance(m.id).nextDue })).filter((r) => r.balance > 0);
   if (key === "finance" && activeFilters[key]?.pastdue) rows = activeMembers().map((m) => ({ ...memberFinance(m.id), id: m.id, memberId: m.id, type: "Member balance", amount: memberFinance(m.id).charges, balanceAfter: memberFinance(m.id).balance, status: memberFinance(m.id).status, dueDate: memberFinance(m.id).nextDue })).filter((r) => r.status === "Past due");
   if (activeFilters[key]?.status) rows = rows.filter((r) => r.status === activeFilters[key].status || r.memberStatus === activeFilters[key].status);
@@ -1118,9 +1125,9 @@ function openForm(key, id) {
   if (!meta) return;
   const existing = state[key].find((r) => r.id === id);
   openModal(`<h3>${existing ? `Edit ${meta.title}` : meta.addLabel}</h3><form id="recordForm" class="form-grid">${meta.fields.map((f) => formField(f, existing)).join("")}<div class="wide button-row"><button class="primary" type="submit">Save</button><button class="ghost" type="button" data-close-modal>Cancel</button></div></form>`);
-  document.getElementById("recordForm").addEventListener("submit", (ev) => {
+  document.getElementById("recordForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    saveRow(key, Object.fromEntries(new FormData(ev.currentTarget).entries()), id);
+    await saveRow(key, Object.fromEntries(new FormData(ev.currentTarget).entries()), id);
   });
 }
 
@@ -1157,7 +1164,7 @@ function selectOptions(opts) {
   return (opts || []).map((x) => [x, x]);
 }
 
-function saveRow(key, row, id) {
+async function saveRow(key, row, id) {
   const validation = validateRow(key, row, id);
   if (validation) return toast(validation);
   snapshot(id ? `${labelize(key)} edited` : `${labelize(key)} added`, { type: key, id, description: row.firstName ? `${row.firstName} ${row.lastName}` : row.title || row.name || row.type });
@@ -1166,6 +1173,7 @@ function saveRow(key, row, id) {
   else state[key].unshift({ id: uid(key[0]), ...row, archived: false });
   recalcMemberDues();
   save(); closeModal(); render();
+  if (cloud.user) await syncCloudWorkspace(false);
 }
 
 function validateRow(key, row, id) {
@@ -1414,13 +1422,14 @@ function openLeadershipForm(id) {
   const existing = state.leadership.find((l) => l.id === id);
   const fields = [["role", "Role", "select", "officerRoles"], ["assignedMember", "Assigned member", "select", "members"], ["committee", "Committee", "select", "committees"], ["responsibilities", "Responsibilities", "textarea"], ["relatedReports", "Related reports", "text"]];
   openModal(`<h3>${existing ? "Edit officer role" : "Add officer role"}</h3><form id="leadershipForm" class="form-grid">${fields.map((f) => formField(f, existing)).join("")}<div class="wide button-row"><button class="primary">Save</button><button class="ghost" type="button" data-close-modal>Cancel</button></div></form>`);
-  document.getElementById("leadershipForm").addEventListener("submit", (ev) => {
+  document.getElementById("leadershipForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const row = Object.fromEntries(new FormData(ev.currentTarget).entries());
     if (isDuplicateLeadershipAssignment(row, id)) return toast("That member already has this officer assignment.");
     snapshot(existing ? "Officer role edited" : "Officer role added", { type: "leadership", id });
     if (existing) Object.assign(existing, row); else state.leadership.unshift({ id: uid("l"), ...row });
     save(); closeModal(); render();
+    if (cloud.user) await syncCloudWorkspace(false);
   });
 }
 
@@ -1457,17 +1466,115 @@ function importFile(file) {
 function previewCsvImport(target, text) {
   const rows = parseCsv(text);
   const validation = validateImport(target, rows);
+  importState = { importing: false, result: null, error: "", rows, target, validation };
+  renderImportPreview();
+}
+
+function renderImportPreview() {
+  const { target, rows, validation, importing, result, error } = importState;
   const goodCount = rows.length - validation.errors.length;
+  const disableImport = importing || !rows.length || (target !== "members" && validation.errors.length) || (target === "members" && goodCount === 0);
   openModal(`<h3>Preview ${labelize(target)} import</h3><p>${goodCount} valid rows, ${validation.errors.length} rows need attention.</p>
     ${validation.errors.length ? `<div class="notice"><h4>Errors</h4><ul>${validation.errors.slice(0, 12).map((e) => `<li>${safe(e)}</li>`).join("")}</ul></div>` : ""}
+    ${error ? `<div class="notice error-notice"><h4>Import failed</h4><p>${safe(error)}</p></div>` : ""}
+    ${result ? renderImportResult(result) : ""}
     <div class="table-wrap"><table><thead><tr>${Object.keys(rows[0] || {}).map((h) => `<th>${safe(h)}</th>`).join("")}</tr></thead><tbody>${rows.slice(0, 8).map((r) => `<tr>${Object.values(r).map((v) => `<td>${safe(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
-    <div class="button-row"><button class="primary" id="confirmImport" ${validation.errors.length ? "disabled" : ""}>Import rows</button><button class="ghost" data-close-modal>Cancel</button></div>`);
-  document.getElementById("confirmImport")?.addEventListener("click", () => {
+    <div class="button-row"><button class="primary" id="confirmImport" ${disableImport ? "disabled" : ""}>${importing ? "Importing…" : result?.failed ? "Retry import" : "Import rows"}</button><button class="ghost" data-close-modal>${result ? "Close" : "Cancel"}</button></div>`);
+  document.getElementById("confirmImport")?.addEventListener("click", confirmCsvImport);
+}
+
+function renderImportResult(result) {
+  return `<div class="notice success-notice"><h4>Import result</h4>
+    <div class="mini-grid">
+      ${mini("Total rows", result.totalRows ?? 0)}
+      ${mini("Valid rows", result.validRows ?? 0)}
+      ${mini("Inserted", result.inserted ?? 0)}
+      ${mini("Updated", result.updated ?? 0)}
+      ${mini("Skipped", result.skipped ?? 0)}
+      ${mini("Failed", result.failed ?? 0)}
+    </div>
+    ${result.failedRows?.length ? `<ul>${result.failedRows.slice(0, 20).map((r) => `<li>Row ${safe(r.rowNumber || "")}: ${safe(r.name || "Unnamed")} — ${safe(r.reason || "Failed")}</li>`).join("")}</ul>` : ""}
+  </div>`;
+}
+
+async function confirmCsvImport() {
+  const { target, rows } = importState;
+  if (importState.importing) return;
+  if (target === "members") return importMembersCsv(rows);
+
+  try {
+    importState.importing = true;
+    renderImportPreview();
     snapshot(`${labelize(target)} CSV imported`, { type: "import", description: `${rows.length} rows` });
     rows.forEach((row) => importRow(target, row));
     recalcMemberDues();
-    save(); closeModal(); render(); toast("CSV import complete.");
-  });
+    save();
+    if (cloud.user) await syncCloudWorkspace(false);
+    importState.result = { totalRows: rows.length, validRows: rows.length, inserted: rows.length, updated: 0, skipped: 0, failed: 0, failedRows: [] };
+    importState.error = "";
+    importState.importing = false;
+    render();
+    renderImportPreview();
+    toast("CSV import complete.");
+  } catch (err) {
+    logSupabaseError("CSV import failed", err);
+    importState.importing = false;
+    importState.error = formatSupabaseError(err, "CSV import failed.");
+    renderImportPreview();
+  }
+}
+
+async function importMembersCsv(rows) {
+  importState.importing = true;
+  importState.error = "";
+  renderImportPreview();
+
+  try {
+    if (!cloud.client) throw new Error("Supabase is not configured for this deployment.");
+    const { data: sessionData, error: sessionError } = await cloud.client.auth.getSession();
+    if (sessionError) throw sessionError;
+    cloud.user = sessionData.session?.user || cloud.user;
+    if (!cloud.user?.id) throw new Error("You must be signed in to import members.");
+    const organizationId = await ensureCloudWorkspace();
+    const validRows = rows.map((row, i) => cleanMemberImportRow(row, i + 2)).filter(isValidMemberImportRow);
+
+    importDebug("submitting member CSV import", {
+      userId: cloud.user.id,
+      organizationId,
+      validRows: validRows.length,
+      totalRows: rows.length,
+      targetTable: "workspace_state.data.members"
+    });
+
+    const { data, error } = await cloud.client.rpc("import_members_to_workspace", { p_members: validRows });
+    if (error) throw error;
+    const result = Array.isArray(data) ? data[0] : data;
+    if (!result?.workspace_data) throw new Error("Import completed without returning saved workspace data.");
+    state = normalize(result.workspace_data);
+    save();
+    await loadCloudWorkspace({ throwOnError: true });
+    importState.importing = false;
+    importState.result = {
+      totalRows: result.totalRows ?? rows.length,
+      validRows: result.validRows ?? validRows.length,
+      inserted: result.inserted ?? 0,
+      updated: result.updated ?? 0,
+      skipped: result.skipped ?? 0,
+      failed: (result.failed ?? 0) + (importState.validation?.failedRows?.length || 0),
+      failedRows: [...(importState.validation?.failedRows || []), ...(result.failedRows || [])]
+    };
+    importState.error = "";
+    render();
+    renderImportPreview();
+    toast("Member import saved to Supabase.");
+  } catch (err) {
+    logSupabaseError("member CSV import failed", err);
+    importState.importing = false;
+    importState.result = null;
+    importState.error = formatSupabaseError(err, "Member import failed.");
+    renderImportPreview();
+    toast("Member import failed.");
+  }
 }
 
 function parseCsv(text) {
@@ -1492,16 +1599,25 @@ function splitCsvLine(line) {
 
 function validateImport(target, rows) {
   const errors = [];
+  const failedRows = [];
   rows.forEach((row, i) => {
-    if (["members", "pnms"].includes(target) && (!row.firstName && !row.first_name || !row.lastName && !row.last_name)) errors.push(`Row ${i + 2}: firstName and lastName are required.`);
+    const clean = target === "members" ? cleanMemberImportRow(row, i + 2) : cleanImportRow(row);
+    if (["members", "pnms"].includes(target) && (!clean.firstName || !clean.lastName)) {
+      errors.push(`Row ${i + 2}: firstName and lastName are required.`);
+      failedRows.push({ rowNumber: i + 2, name: `${clean.firstName || ""} ${clean.lastName || ""}`.trim(), reason: "Missing first name or last name." });
+    }
+    if (target === "members" && clean.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) {
+      errors.push(`Row ${i + 2}: invalid email format.`);
+      failedRows.push({ rowNumber: i + 2, name: `${clean.firstName || ""} ${clean.lastName || ""}`.trim(), reason: "Invalid email format." });
+    }
     if (target === "finance" && (!row.memberId && !row.email && !row.phone)) errors.push(`Row ${i + 2}: finance import needs memberId, email, or phone.`);
     if (target === "finance" && !parseMoney(row.amount || row.owed || row.paid)) errors.push(`Row ${i + 2}: amount is required.`);
   });
-  return { errors };
+  return { errors, failedRows };
 }
 
 function importRow(target, row) {
-  const clean = Object.fromEntries(Object.entries(row).map(([k, v]) => [camel(k), v]));
+  const clean = cleanImportRow(row);
   if (target === "members") state.members.push({ id: uid("m"), firstName: clean.firstName, lastName: clean.lastName, phone: clean.phone || "", email: clean.email || "", schoolYear: clean.schoolYear || "", major: clean.major || "", hometown: clean.hometown || "", memberStatus: clean.memberStatus || "Active", initiationStatus: clean.initiationStatus || "Member", officerRole: clean.officerRole || "", committee: clean.committee || "", housingStatus: clean.housingStatus || "Not tracked", duesStatus: clean.duesStatus || "Not billed", notes: clean.notes || "", tags: clean.tags || "", lifecycle: clean.lifecycle || "Active", archived: false });
   if (target === "pnms") state.pnms.push({ id: uid("p"), ...clean, status: clean.status || "New lead", archived: false });
   if (target === "finance") {
@@ -1510,8 +1626,49 @@ function importRow(target, row) {
   }
 }
 
+function cleanImportRow(row) {
+  return Object.fromEntries(Object.entries(row).map(([k, v]) => [camel(k), typeof v === "string" ? v.trim().replace(/\s+/g, " ") : v]));
+}
+
+function cleanMemberImportRow(row, csvRowNumber) {
+  const clean = cleanImportRow(row);
+  const email = String(clean.email || "").trim().toLowerCase();
+  const phone = String(clean.phone || "").replace(/\D/g, "");
+  const rollNumber = clean.rollNumber || clean.roll || clean.nationalMemberNumber || clean.badgeNumber || clean.memberNumber || "";
+  return {
+    id: clean.id || clean.memberId || "",
+    csvRowNumber,
+    firstName: clean.firstName || "",
+    lastName: clean.lastName || "",
+    phone,
+    email,
+    schoolYear: clean.schoolYear || clean.classYear || clean.year || "",
+    major: clean.major || "",
+    hometown: clean.hometown || "",
+    rollNumber: String(rollNumber || "").trim(),
+    nationalMemberNumber: String(clean.nationalMemberNumber || "").trim(),
+    badgeNumber: String(clean.badgeNumber || "").trim(),
+    memberNumber: String(clean.memberNumber || "").trim(),
+    memberStatus: clean.memberStatus || "Active",
+    initiationStatus: clean.initiationStatus || "Member",
+    officerRole: clean.officerRole || "",
+    committee: clean.committee || "",
+    housingStatus: clean.housingStatus || "Not tracked",
+    duesStatus: clean.duesStatus || "Not billed",
+    notes: clean.notes || "",
+    tags: clean.tags || "",
+    lifecycle: clean.lifecycle || "Active",
+    archived: false
+  };
+}
+
+function isValidMemberImportRow(row) {
+  return Boolean(row.firstName && row.lastName && (!row.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)));
+}
+
 function camel(key) {
-  return key.replace(/_([a-z])/g, (_, c) => c.toUpperCase()).replace(/\s+([a-z])/g, (_, c) => c.toUpperCase());
+  const cleaned = String(key || "").trim().replace(/[^a-zA-Z0-9]+(.)/g, (_, c) => c.toUpperCase());
+  return cleaned.charAt(0).toLowerCase() + cleaned.slice(1);
 }
 
 function findMemberForImport(row) {
