@@ -62,6 +62,16 @@ const navigationItems = [
   { view: "reports", label: "Reports", permission: "reports.executive.view" },
   { view: "settings", label: "Settings", permission: "settings.view" }
 ];
+const memberNavigationItems = [
+  { tab: "home", label: "Home" },
+  { tab: "profile", label: "My Profile" },
+  { tab: "balance", label: "My Balance" },
+  { tab: "payments", label: "My Payments" },
+  { tab: "attendance", label: "My Attendance" },
+  { tab: "tasks", label: "My Tasks" },
+  { tab: "calendar", label: "Chapter Calendar" },
+  { tab: "announcements", label: "Announcements" }
+];
 const routePermissions = Object.fromEntries(navigationItems.map((item) => [item.view, item.permission]));
 
 const defaults = {
@@ -76,12 +86,14 @@ const defaults = {
 let activeView = "dashboard";
 let activeFilters = {};
 let historyStack = [];
-let cloud = { client: null, user: null, profile: null, profiles: [], organizationId: localStorage.getItem(orgStoreKey) };
+let cloud = { client: null, user: null, profile: null, profiles: [], memberships: [], organizationId: localStorage.getItem(orgStoreKey) };
 let state = load();
 let setupSave = { saving: false, error: "", success: "", fieldErrors: {} };
 let importState = { importing: false, result: null, error: "", rows: [], target: "", validation: null };
 const pendingDeletes = new Set();
 let financeSort = { key: "lastName", dir: "asc" };
+let activePortalTab = "home";
+let memberPortal = { loading: false, error: "", data: null, saving: false };
 
 function resolvedRole() {
   const role = cloud.profile?.approval_status === "approved" ? cloud.profile?.role : "";
@@ -336,6 +348,7 @@ async function signOut() {
   cloud.user = null;
   cloud.profile = null;
   cloud.profiles = [];
+  cloud.memberships = [];
   cloud.organizationId = "";
   localStorage.removeItem(orgStoreKey);
   resetSensitiveClientState();
@@ -348,7 +361,10 @@ async function bootstrapUser() {
   if (cloud.profile?.approval_status === "approved") {
     state.settings.currentRole = resolvedRole();
     if (isFullWorkspaceAllowed()) await loadCloudWorkspace();
-    else resetSensitiveClientState(state.settings.currentRole);
+    else {
+      resetSensitiveClientState(state.settings.currentRole);
+      await loadMemberPortal();
+    }
     if (can("all")) await loadProfilesForAdmin();
   }
 }
@@ -358,10 +374,24 @@ function resetSensitiveClientState(role = "Active Member") {
   state.settings.currentRole = role;
   activeFilters = {};
   importState = { importing: false, result: null, error: "", rows: [], target: "", validation: null };
+  memberPortal = { loading: false, error: "", data: null, saving: false };
   historyStack = [];
   try {
     localStorage.removeItem(storeKey);
   } catch {}
+}
+
+async function loadMemberPortal() {
+  if (!cloud.client || !cloud.user || isFullWorkspaceAllowed()) return;
+  memberPortal = { ...memberPortal, loading: true, error: "" };
+  try {
+    const { data, error } = await cloud.client.rpc("get_my_member_portal");
+    if (error) throw error;
+    memberPortal = { loading: false, error: "", data: data || null, saving: false };
+  } catch (err) {
+    logSupabaseError("member portal load failed", err);
+    memberPortal = { loading: false, error: formatSupabaseError(err, "Member portal could not be loaded."), data: null, saving: false };
+  }
 }
 
 async function ensureOwnProfile(input = {}) {
@@ -401,6 +431,8 @@ async function loadProfilesForAdmin() {
   if (!cloud.client || !can("all")) return;
   const { data, error } = await cloud.client.from("profiles").select("*").order("created_at", { ascending: false });
   if (!error) cloud.profiles = data || [];
+  const { data: memberships } = await cloud.client.from("organization_members").select("id, organization_id, user_id, email, role, member_id, status");
+  cloud.memberships = memberships || [];
 }
 
 async function ensureCloudWorkspace() {
@@ -799,7 +831,7 @@ const collectionMeta = {
     search: ["name", "date", "location", "type", "required", "description", "notes"],
     columns: ["name", "date", "time", "location", "type", "required", "memberAttendanceCount", "pnmAttendanceCount"],
     fields: [
-      ["name", "Event name", "text", "required"], ["date", "Date", "date", "required"], ["time", "Time", "time"], ["location", "Location", "text"], ["type", "Event type", "select", "eventTypes"], ["required", "Required or optional", "select", ["Required", "Optional"]],
+      ["name", "Event name", "text", "required"], ["date", "Date", "date", "required"], ["time", "Time", "time"], ["location", "Location", "text"], ["type", "Event type", "select", "eventTypes"], ["required", "Required or optional", "select", ["Required", "Optional"]], ["visibility", "Visibility", "select", ["members", "executives", "admins", "private"]],
       ["description", "Description", "textarea"], ["notes", "Notes", "textarea"]
     ]
   },
@@ -837,7 +869,7 @@ function render() {
   if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !routeAllowed(activeView)) activeView = defaultViewForRole();
   document.getElementById("viewTitle").textContent = viewNames[activeView];
   document.getElementById("orgLabel").textContent = `${state.settings.chapterName} · ${state.settings.schoolName}`;
-  document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.view === activeView));
+  document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.view === activeView || b.dataset.memberTab === activePortalTab));
   document.getElementById("resetBtn").textContent = "Clear local data";
   updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required");
   const root = document.getElementById("appRoot");
@@ -882,6 +914,11 @@ function render() {
 function refreshNavigation() {
   const nav = document.querySelector(".nav");
   if (!nav) return;
+  if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !isFullWorkspaceAllowed()) {
+    nav.innerHTML = memberNavigationItems.map((item) => `<button class="nav-item ${activePortalTab === item.tab ? "active" : ""}" data-member-tab="${safe(item.tab)}">${safe(item.label)}</button>`).join("");
+    nav.querySelectorAll("[data-member-tab]").forEach((b) => b.addEventListener("click", () => { activeView = "portal"; activePortalTab = b.dataset.memberTab; render(); }));
+    return;
+  }
   const items = navigationItems.filter((item) => !cloud.client || !cloud.user || can(item.permission));
   nav.innerHTML = items.map((item) => `<button class="nav-item ${item.view === activeView ? "active" : ""}" data-view="${safe(item.view)}">${safe(item.label)}</button>`).join("");
   nav.querySelectorAll(".nav-item").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
@@ -908,20 +945,166 @@ function renderRestrictedPage() {
 }
 
 function renderMemberPortal() {
-  return `<section class="auth-shell member-portal">
+  if (memberPortal.loading) return `<section class="panel empty-state"><h3>Loading Member Portal</h3><p>Getting your chapter information…</p></section>`;
+  if (memberPortal.error) return `<section class="panel empty-state"><h3>Member Portal unavailable</h3><p>${safe(memberPortal.error)}</p><button class="primary" data-refresh-member-portal>Retry</button></section>`;
+  const data = memberPortal.data || {};
+  if (!data.linked) return `<section class="auth-shell member-portal">
     <div class="auth-card">
-      <p class="eyebrow">Member Portal</p>
-      <h3>Your account is active.</h3>
-      <p class="muted">Executive and administrative tools are available only to authorized chapter officers.</p>
+      <p class="eyebrow">Account setup incomplete</p>
+      <h3>Your account has not yet been connected to your chapter member profile.</h3>
+      <p class="muted">Contact a chapter administrator to link your ChapterOps login to your member profile.</p>
       <div class="profile-grid">
         <div><span>Email</span><strong>${safe(cloud.profile?.email || cloud.user?.email || "")}</strong></div>
         <div><span>Role</span><strong>${safe(resolvedRole())}</strong></div>
-        <div><span>Status</span><strong>${safe(cloud.profile?.approval_status || "approved")}</strong></div>
+        <div><span>Account Status</span><strong>Active</strong></div>
         <div><span>Chapter</span><strong>Alpha Omega</strong></div>
       </div>
-      <p class="muted">Member-facing profile, balance, attendance, and task pages can be enabled after matching row-level policies are added for those limited fields.</p>
     </div>
   </section>`;
+  const profile = data.profile || {};
+  const title = activePortalTab === "home" ? "Member Portal" : memberNavigationItems.find((i) => i.tab === activePortalTab)?.label || "Member Portal";
+  return `${renderPageHeader(title, "Alpha Omega Chapter · Kansas State University", activePortalTab === "profile" ? [["Refresh", "ghost", "portal-refresh"]] : [])}
+    ${activePortalTab === "home" ? renderPortalHome(data) : ""}
+    ${activePortalTab === "profile" ? renderPortalProfile(profile, data) : ""}
+    ${activePortalTab === "balance" ? renderPortalBalance(data.finance || {}) : ""}
+    ${activePortalTab === "payments" ? renderPortalPayments(data.payments || []) : ""}
+    ${activePortalTab === "attendance" ? renderPortalAttendance(data.attendanceSummary || {}, data.attendance || []) : ""}
+    ${activePortalTab === "tasks" ? renderPortalTasks(data.tasks || []) : ""}
+    ${activePortalTab === "calendar" ? renderPortalCalendar(data.events || []) : ""}
+    ${activePortalTab === "announcements" ? renderPortalAnnouncements(data.announcements || []) : ""}`;
+}
+
+function renderPortalHome(data) {
+  const profile = data.profile || {};
+  const finance = data.finance || {};
+  const attendance = data.attendanceSummary || {};
+  const tasks = data.tasks || [];
+  const events = data.events || [];
+  const announcements = data.announcements || [];
+  return `<section class="panel">
+    <div class="panel-head"><div><h3>Welcome, ${safe(profile.preferredName || profile.firstName || "Member")}</h3><p class="muted">Your personal chapter overview.</p></div></div>
+    <div class="kpi-grid">
+      ${portalCard("Current Balance", moneyFromCents(Number(finance.totalBalanceCents || 0)), "balance")}
+      ${portalCard("Next Payment Due", finance.dueDate || "Not set", "balance")}
+      ${portalCard("Attendance Rate", `${attendance.attendanceRate || 0}%`, "attendance")}
+      ${portalCard("Open Tasks", tasks.filter((t) => !["Done", "Completed", "Archived", "Cancelled"].includes(t.status)).length, "tasks")}
+      ${portalCard("Upcoming Events", events.length, "calendar")}
+      ${portalCard("Account Status", "Active", "profile")}
+    </div>
+  </section>
+  <div class="three-col">
+    ${portalListPanel("Recent Payments", (data.payments || []).slice(0, 5).map((p) => `${safe(p.date || "No date")}<span>${safe(p.type || "Payment")} · ${safe(p.paymentDisplay || p.amountDisplay || "")}</span>`), "payments")}
+    ${portalListPanel("Upcoming Chapter Events", events.slice(0, 5).map((e) => `${safe(e.name || e.title)}<span>${safe(e.date || "")} · ${safe(e.location || "Location TBA")}</span>`), "calendar")}
+    ${portalListPanel("Latest Announcement", announcements.slice(0, 3).map((a) => `${safe(a.title)}<span>${safe(a.publishedAt || "")}</span>`), "announcements")}
+  </div>`;
+}
+
+function portalCard(label, value, tab) {
+  return `<button class="kpi-card" data-member-tab="${safe(tab)}"><span>${safe(label)}</span><strong>${safe(value)}</strong><em>Open</em></button>`;
+}
+
+function portalListPanel(title, rows, tab) {
+  return `<section class="panel"><div class="panel-head"><h3>${safe(title)}</h3><button class="ghost small" data-member-tab="${safe(tab)}">Open</button></div><div class="stack-list">${rows.length ? rows.map((r) => `<div class="stack-item">${r}</div>`).join("") : emptySmall(portalEmptyText(tab))}</div></section>`;
+}
+
+function portalEmptyText(tab) {
+  return {
+    payments: "No payment activity yet.",
+    attendance: "No attendance records yet.",
+    tasks: "No open tasks.",
+    calendar: "No upcoming member-visible events.",
+    announcements: "No current chapter announcements."
+  }[tab] || "Nothing to show yet.";
+}
+
+function renderPortalProfile(profile, data) {
+  return `<section class="panel">
+    <div class="panel-head"><div><h3>${safe([profile.firstName, profile.lastName].filter(Boolean).join(" ") || "My Profile")}</h3><p class="muted">Review your chapter profile and update approved contact fields.</p></div></div>
+    <form id="memberProfileForm" class="form-grid">
+      <label>First name<input value="${safe(profile.firstName || "")}" disabled /></label>
+      <label>Last name<input value="${safe(profile.lastName || "")}" disabled /></label>
+      <label>Preferred name<input name="preferredName" value="${safe(profile.preferredName || "")}" /></label>
+      <label>Phone<input name="phone" value="${safe(profile.phone || "")}" /></label>
+      <label>Email<input name="email" type="email" value="${safe(profile.email || "")}" /></label>
+      <label>School year<input name="schoolYear" value="${safe(profile.schoolYear || "")}" /></label>
+      <label>Graduation year<input name="graduationYear" value="${safe(profile.graduationYear || "")}" /></label>
+      <label>Chapter status<input value="${safe(profile.memberStatus || "Active")}" disabled /></label>
+      <label>Initiation status<input value="${safe(profile.initiationStatus || "Member")}" disabled /></label>
+      <label>Officer title<input value="${safe(profile.officerRole || "—")}" disabled /></label>
+      <label>Committee<input value="${safe(profile.committee || "—")}" disabled /></label>
+      <label>Emergency-contact status<input value="${safe(profile.emergencyContactStatus || "Not tracked")}" disabled /></label>
+      <label>Account-link status<input value="${data.linked ? "Connected" : "Not connected"}" disabled /></label>
+      <div class="wide button-row"><button class="primary" type="submit" ${memberPortal.saving ? "disabled" : ""}>${memberPortal.saving ? "Saving…" : "Save profile"}</button></div>
+    </form>
+  </section>`;
+}
+
+function renderPortalBalance(finance) {
+  const total = Number(finance.totalBalanceCents || 0);
+  return `<section class="panel">
+    <div class="panel-head"><div><h3>My Balance</h3><p class="muted">Your current chapter billing summary.</p></div><button class="ghost" data-member-tab="payments">View Payments</button></div>
+    <div class="mini-grid">
+      ${mini("Pending charges", moneyFromCents(Number(finance.pendingChargeCents || 0)))}
+      ${mini("Previous balance", moneyFromCents(Number(finance.currentBalanceCents || 0)))}
+      ${mini(total < 0 ? "Account credit" : "Total balance", moneyFromCents(total))}
+      ${mini("Payments received", moneyFromCents(Number(finance.amountPaidCents || 0)))}
+      ${mini("Remaining balance", moneyFromCents(Number(finance.remainingBalanceCents ?? total)))}
+      ${mini("Due date", finance.dueDate || "Not set")}
+      ${mini("Payment plan", finance.paymentPlanStatus || "None")}
+      ${mini("Last payment", finance.lastPaymentDate || "None recorded")}
+      ${mini("Financial status", finance.financialStatus || "Current")}
+    </div>
+  </section>`;
+}
+
+function renderPortalPayments(payments) {
+  if (!payments.length) return `<section class="panel empty-state"><h3>No payment activity</h3><p>Payments and account adjustments will appear here.</p></section>`;
+  return `<section class="panel"><div class="panel-head"><div><h3>My Payments</h3><p class="muted">Your personal payment and charge history.</p></div><button class="ghost" data-print>Print statement</button></div>${portalTable(["Date", "Type", "Description", "Charge", "Payment", "Credit", "Remaining Balance", "Status"], payments.map((p) => [p.date || "", p.type || "", p.description || "", p.chargeDisplay || "", p.paymentDisplay || "", p.creditDisplay || "", p.remainingBalanceDisplay || "", p.status || ""]))}</section>`;
+}
+
+function renderPortalAttendance(summary, rows) {
+  return `<section class="panel">
+    <div class="panel-head"><div><h3>My Attendance</h3><p class="muted">Your personal event attendance history.</p></div></div>
+    <div class="mini-grid">
+      ${mini("Events attended", summary.attended || 0)}
+      ${mini("Events missed", summary.missed || 0)}
+      ${mini("Excused absences", summary.excused || 0)}
+      ${mini("Attendance rate", `${summary.attendanceRate || 0}%`)}
+      ${mini("Threshold", `${summary.threshold || 0}%`)}
+      ${mini("Standing", summary.standing || "Not available")}
+    </div>
+    ${rows.length ? portalTable(["Event", "Date", "Event type", "Attendance status", "Excuse status", "Notes", "Actions"], rows.map((a) => [
+      a.eventName || "",
+      a.eventDate || "",
+      a.eventType || "",
+      a.status || "",
+      a.excuseStatus || "",
+      a.memberVisibleNotes || "",
+      a.eventId ? `<button class="ghost small" data-request-excuse="${safe(a.eventId)}" data-event-name="${safe(a.eventName || "Event")}">Request Excuse</button>` : ""
+    ]), true) : `<div class="empty-state"><h3>No attendance records</h3><p>Your attendance history will appear after chapter events are recorded.</p></div>`}
+  </section>`;
+}
+
+function renderPortalTasks(tasks) {
+  if (!tasks.length) return `<section class="panel empty-state"><h3>No open tasks</h3><p>You do not currently have any assigned tasks.</p></section>`;
+  return `<section class="panel"><div class="panel-head"><div><h3>My Tasks</h3><p class="muted">Tasks assigned to you or shared with active members.</p></div></div><div class="stack-list">${tasks.map((task) => `<article class="stack-item"><strong>${safe(task.title)}</strong><span>${safe(task.description || "")}</span><span>Due ${safe(task.dueDate || "not set")} · ${safe(task.priority || "Normal")} · ${safe(task.status || "Not Started")}</span><div class="button-row"><button class="ghost small" data-my-task-status="${safe(task.id)}:In Progress">In Progress</button><button class="primary small" data-my-task-status="${safe(task.id)}:Completed">Completed</button></div></article>`).join("")}</div></section>`;
+}
+
+function renderPortalCalendar(events) {
+  if (!events.length) return `<section class="panel empty-state"><h3>No upcoming events</h3><p>There are no member-visible events scheduled.</p></section>`;
+  return `<section class="panel"><div class="panel-head"><div><h3>Chapter Calendar</h3><p class="muted">Events shared with active members.</p></div></div>${portalTable(["Event", "Date", "Time", "Location", "Type", "Requirement", "Description"], events.map((e) => [e.name || e.title || "", e.date || "", [e.time, e.endTime].filter(Boolean).join(" – "), e.location || "", e.type || "", e.required || "", e.description || ""]))}</section>`;
+}
+
+function renderPortalAnnouncements(announcements) {
+  if (!announcements.length) return `<section class="panel empty-state"><h3>No announcements</h3><p>There are no current chapter announcements.</p></section>`;
+  return `<section class="panel"><div class="panel-head"><div><h3>Announcements</h3><p class="muted">Chapter updates shared with you.</p></div></div><div class="stack-list">${announcements.map((a) => `<article class="stack-item"><strong>${safe(a.title)}</strong><span>${safe(a.body || "")}</span><span>${safe(a.publishedAt || "")}</span></article>`).join("")}</div></section>`;
+}
+
+function portalTable(headers, rows, allowHtml = false) {
+  return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${safe(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell, idx) => {
+    const value = cell === undefined || cell === null || cell === "" ? "—" : cell;
+    return `<td data-label="${safe(headers[idx])}">${allowHtml && idx === headers.length - 1 ? value : safe(value)}</td>`;
+  }).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
 function renderPageHeader(title, subtitle = "", actions = []) {
@@ -939,6 +1122,7 @@ function renderHeaderAction(label, style = "ghost", target = "") {
   if (target.endsWith(":import")) return `<button class="${safe(style)}" data-import="${safe(target.split(":")[0])}">${safe(label)}</button>`;
   if (target.startsWith("export:")) return `<button class="${safe(style)}" data-export="${safe(target.split(":")[1])}">${safe(label)}</button>`;
   if (target === "print") return `<button class="${safe(style)}" data-print>${safe(label)}</button>`;
+  if (target === "portal-refresh") return `<button class="${safe(style)}" data-refresh-member-portal>${safe(label)}</button>`;
   return `<button class="${safe(style)}" data-go="${safe(target)}">${safe(label)}</button>`;
 }
 
@@ -1799,17 +1983,22 @@ function renderSettings() {
 
 function renderAdminUserManagement() {
   const rows = cloud.profiles || [];
+  const membershipFor = (userId) => (cloud.memberships || []).find((m) => m.user_id === userId) || {};
+  const memberOptions = [`<option value="">Not linked</option>`, ...activeMembers().map((m) => `<option value="${safe(m.id)}">${safe(memberName(m.id))} · ${safe(memberIdentifier(m))}</option>`)].join("");
   return `<section class="panel">
     <div class="panel-head">
       <div><p class="eyebrow">Admin only</p><h3>User approvals and roles</h3></div>
       <button class="ghost" data-refresh-users>Refresh users</button>
     </div>
     <p class="muted">Personal emails are allowed. New accounts stay pending until an Admin approves them and assigns a role.</p>
-    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Requested role</th><th>Assigned role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody>${rows.map((p) => `<tr>
+    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Requested role</th><th>Assigned role</th><th>Linked member</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody>${rows.map((p) => {
+      const membership = membershipFor(p.id);
+      return `<tr>
       <td data-label="Name">${safe(p.full_name || "")}</td>
       <td data-label="Email">${safe(p.email)}</td>
       <td data-label="Requested role">${safe(p.requested_role)}</td>
       <td data-label="Assigned role"><select data-user-role="${p.id}">${permissionRoles.map((r) => `<option ${p.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td>
+      <td data-label="Linked member"><select data-user-member="${p.id}">${memberOptions.replace(`value="${safe(membership.member_id || "")}"`, `value="${safe(membership.member_id || "")}" selected`)}</select></td>
       <td data-label="Status"><span class="pill">${safe(p.approval_status)}</span></td>
       <td data-label="Joined">${safe(p.created_at ? new Date(p.created_at).toLocaleDateString() : "")}</td>
       <td data-label="Actions"><div class="row-actions">
@@ -1818,7 +2007,8 @@ function renderAdminUserManagement() {
         <button class="small ghost" data-user-action="disable:${p.id}">Disable</button>
         <button class="small ghost" data-user-action="role:${p.id}">Save role</button>
       </div></td>
-    </tr>`).join("")}</tbody></table></div>` : `<div class="empty-state"><h3>No access requests yet.</h3><p>When your Treasurer or another officer creates an account with a personal email, they will appear here for approval.</p></div>`}
+    </tr>`;
+    }).join("")}</tbody></table></div>` : `<div class="empty-state"><h3>No access requests yet.</h3><p>When your Treasurer or another officer creates an account with a personal email, they will appear here for approval.</p></div>`}
   </section>`;
 }
 
@@ -1839,6 +2029,14 @@ function emptySmall(text) {
 }
 
 function bindViewActions(root) {
+  root.querySelectorAll("[data-member-tab]").forEach((el) => el.addEventListener("click", () => { activeView = "portal"; activePortalTab = el.dataset.memberTab; render(); }));
+  root.querySelectorAll("[data-refresh-member-portal]").forEach((el) => el.addEventListener("click", async () => { await loadMemberPortal(); render(); }));
+  root.querySelector("#memberProfileForm")?.addEventListener("submit", saveMyMemberProfile);
+  root.querySelectorAll("[data-request-excuse]").forEach((el) => el.addEventListener("click", () => openExcuseRequestForm(el.dataset.requestExcuse, el.dataset.eventName || "Event")));
+  root.querySelectorAll("[data-my-task-status]").forEach((el) => el.addEventListener("click", async () => {
+    const [taskId, status] = el.dataset.myTaskStatus.split(":");
+    await updateMyTaskStatus(taskId, status);
+  }));
   root.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => { applyFilter(el.dataset.go, el.dataset.filter || ""); setView(el.dataset.go); }));
   root.querySelectorAll("[data-add]").forEach((el) => el.addEventListener("click", () => el.dataset.add === "finance" ? openBulkChargeForm() : openForm(el.dataset.add)));
   root.querySelectorAll("[data-edit]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.edit.split(":"); openForm(key, id); }));
@@ -1873,7 +2071,8 @@ function bindViewActions(root) {
   root.querySelectorAll("[data-user-action]").forEach((el) => el.addEventListener("click", () => {
     const [action, userId] = el.dataset.userAction.split(":");
     const role = root.querySelector(`[data-user-role="${userId}"]`)?.value;
-    updateUserAccess(action, userId, role);
+    const memberId = root.querySelector(`[data-user-member="${userId}"]`)?.value || "";
+    updateUserAccess(action, userId, role, memberId);
   }));
   root.querySelector("[data-refresh-users]")?.addEventListener("click", async () => { await loadProfilesForAdmin(); render(); toast("Users refreshed."); });
   root.querySelectorAll("[data-save-settings]").forEach((saveSettings) => saveSettings.addEventListener("click", saveSettingsForm));
@@ -1885,7 +2084,81 @@ function bindViewActions(root) {
   if (record) record.addEventListener("click", recordCheckin);
 }
 
-async function updateUserAccess(action, userId, role) {
+async function saveMyMemberProfile(ev) {
+  ev.preventDefault();
+  if (!cloud.client || !cloud.user) return toast("Sign in required.");
+  const form = Object.fromEntries(new FormData(ev.currentTarget).entries());
+  memberPortal = { ...memberPortal, saving: true };
+  render();
+  try {
+    const { data, error } = await cloud.client.rpc("update_my_member_profile", {
+      p_preferred_name: form.preferredName || "",
+      p_phone: form.phone || "",
+      p_email: form.email || "",
+      p_school_year: form.schoolYear || "",
+      p_graduation_year: form.graduationYear || ""
+    });
+    if (error) throw error;
+    memberPortal = { loading: false, error: "", data: data || memberPortal.data, saving: false };
+    render();
+    toast("Profile saved.");
+  } catch (err) {
+    logSupabaseError("member profile save failed", err);
+    memberPortal = { ...memberPortal, saving: false, error: formatSupabaseError(err, "Profile could not be saved.") };
+    render();
+    toast("Profile could not be saved.");
+  }
+}
+
+async function updateMyTaskStatus(taskId, status) {
+  if (!cloud.client || !cloud.user) return toast("Sign in required.");
+  try {
+    const { data, error } = await cloud.client.rpc("update_my_task_status", { p_task_id: taskId, p_status: status });
+    if (error) throw error;
+    memberPortal = { loading: false, error: "", data: data || memberPortal.data, saving: false };
+    render();
+    toast("Task updated.");
+  } catch (err) {
+    logSupabaseError("member task update failed", err);
+    toast(formatSupabaseError(err, "Task could not be updated."));
+  }
+}
+
+function openExcuseRequestForm(eventId, eventName = "Event") {
+  if (!eventId) return toast("Event not found.");
+  openModal(`<h3>Request Excuse</h3>
+    <p class="muted">${safe(eventName)}</p>
+    <form id="excuseRequestForm" class="form-grid">
+      <label class="wide">Reason<textarea name="reason" required placeholder="Briefly explain the reason for this request."></textarea></label>
+      <label class="wide">Supporting note optional<textarea name="note" placeholder="Add any helpful context for the reviewing officer."></textarea></label>
+      <div class="wide button-row"><button class="primary" type="submit">Submit request</button><button class="ghost" type="button" data-close-modal>Cancel</button></div>
+    </form>`);
+  document.getElementById("excuseRequestForm")?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    await submitMyExcuseRequest(eventId, Object.fromEntries(new FormData(ev.currentTarget).entries()));
+  });
+}
+
+async function submitMyExcuseRequest(eventId, form) {
+  if (!cloud.client || !cloud.user) return toast("Sign in required.");
+  try {
+    const { data, error } = await cloud.client.rpc("submit_my_excuse_request", {
+      p_event_id: eventId,
+      p_reason: form.reason || "",
+      p_note: form.note || ""
+    });
+    if (error) throw error;
+    memberPortal = { loading: false, error: "", data: data || memberPortal.data, saving: false };
+    closeModal();
+    render();
+    toast("Excuse request submitted.");
+  } catch (err) {
+    logSupabaseError("member excuse request failed", err);
+    toast(formatSupabaseError(err, "Excuse request could not be submitted."));
+  }
+}
+
+async function updateUserAccess(action, userId, role, memberId = "") {
   if (!cloud.client || !can("all")) return toast("Admin access required.");
   const target = cloud.profiles.find((p) => p.id === userId);
   if (!target) return toast("User not found.");
@@ -1898,10 +2171,10 @@ async function updateUserAccess(action, userId, role) {
     const dbRole = toDbRole(role);
     const { data: existing } = await cloud.client.from("organization_members").select("id").eq("user_id", userId).maybeSingle();
     if (existing?.id) {
-      const { error } = await cloud.client.from("organization_members").update({ role: dbRole, email: target.email }).eq("id", existing.id);
+      const { error } = await cloud.client.from("organization_members").update({ role: dbRole, email: target.email, member_id: memberId || null, status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
       if (error) return toast(error.message);
     } else {
-      const { error } = await cloud.client.from("organization_members").insert({ organization_id: organizationId, user_id: userId, email: target.email, role: dbRole });
+      const { error } = await cloud.client.from("organization_members").insert({ organization_id: organizationId, user_id: userId, email: target.email, role: dbRole, member_id: memberId || null, status: "active" });
       if (error) return toast(error.message);
     }
   }
