@@ -11,16 +11,16 @@ const parseMoney = (v) => parseMoneyToCents(v) / 100;
 const setupDebug = (...args) => console.info("[ChapterOps setup]", ...args);
 
 const viewNames = {
-  dashboard: "Executive Dashboard",
-  members: "Member Roster",
+  dashboard: "Dashboard",
+  members: "Members",
   leadership: "Executive Team",
-  recruitment: "Recruitment / PNMs",
+  recruitment: "Recruitment",
   events: "Attendance",
-  finance: "Treasurer / Dues",
+  finance: "Finance",
   kpis: "KPI Reports",
-  tasks: "Tasks / Follow-Ups",
+  tasks: "Tasks",
   reports: "Reports",
-  settings: "Setup / Settings"
+  settings: "Settings"
 };
 
 const permissionRoles = ["Admin", "Treasurer", "Assistant Treasurer", "President", "Exec Board", "Committee Chair", "Active Member", "Read-only Advisor"];
@@ -67,7 +67,7 @@ function toDbRole(role = "") {
   return "member";
 }
 
-function formatSupabaseError(err, fallback = "Supabase request failed.") {
+function formatSupabaseError(err, fallback = "Request failed.") {
   if (!err) return fallback;
   const parts = [err.message, err.details, err.hint, err.code].filter(Boolean);
   return parts.length ? parts.join(" ") : fallback;
@@ -194,13 +194,13 @@ async function initCloud() {
   cloud.client.auth.onAuthStateChange(async (event, session) => {
     cloud.user = session?.user || null;
     cloud.profile = null;
-    updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required for real cloud data");
+    updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required");
     if (event === "PASSWORD_RECOVERY") openNewPasswordModal();
     if (cloud.user) await bootstrapUser();
     render();
   });
   if (cloud.user) await bootstrapUser();
-  updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required for real cloud data");
+  updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required");
 }
 
 function updateCloudUi(message) {
@@ -215,7 +215,7 @@ async function signIn() {
 }
 
 async function signInWithPassword(email, password) {
-  if (!cloud.client) return toast("Supabase is not configured.");
+  if (!cloud.client) return toast("Cloud sync is not configured.");
   const { error } = await cloud.client.auth.signInWithPassword({ email, password });
   if (error) return toast(error.message);
   closeModal();
@@ -223,7 +223,7 @@ async function signInWithPassword(email, password) {
 }
 
 async function createAccount(email, password, confirmPassword, fullName, requestedRole = "Active Member", requestNotes = "") {
-  if (!cloud.client) return toast("Supabase is not configured.");
+  if (!cloud.client) return toast("Cloud sync is not configured.");
   if (password.length < 8) return toast("Password must be at least 8 characters.");
   if (password !== confirmPassword) return toast("Passwords do not match.");
   const { data, error } = await cloud.client.auth.signUp({
@@ -244,14 +244,14 @@ async function createAccount(email, password, confirmPassword, fullName, request
 }
 
 async function sendPasswordReset(email) {
-  if (!cloud.client) return toast("Supabase is not configured.");
+  if (!cloud.client) return toast("Cloud sync is not configured.");
   if (!email) return toast("Enter your email address first.");
   const { error } = await cloud.client.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
   toast(error ? error.message : "Password reset email sent.");
 }
 
 async function updateAccountPassword(password, confirmPassword) {
-  if (!cloud.client) return toast("Supabase is not configured.");
+  if (!cloud.client) return toast("Cloud sync is not configured.");
   if (password.length < 8) return toast("Password must be at least 8 characters.");
   if (password !== confirmPassword) return toast("Passwords do not match.");
   const { error } = await cloud.client.auth.updateUser({ password });
@@ -316,7 +316,7 @@ async function loadProfilesForAdmin() {
 }
 
 async function ensureCloudWorkspace() {
-  if (!cloud.client || !cloud.user) throw new Error("Sign in before syncing real chapter data.");
+  if (!cloud.client || !cloud.user) throw new Error("Sign in before syncing chapter data.");
   if (cloud.profile?.approval_status !== "approved") throw new Error("Your account is pending admin approval.");
   if (cloud.organizationId) return cloud.organizationId;
   const { data: existing } = await cloud.client.from("organization_members").select("organization_id").eq("user_id", cloud.user.id).limit(1).maybeSingle();
@@ -325,7 +325,7 @@ async function ensureCloudWorkspace() {
     localStorage.setItem(orgStoreKey, cloud.organizationId);
     return cloud.organizationId;
   }
-  if (cloud.profile?.role !== "Admin") throw new Error("Your account is approved but not assigned to a chapter workspace yet.");
+  if (cloud.profile?.role !== "Admin") throw new Error("Your account is approved but not assigned to a chapter yet.");
   const { data: org, error: orgError } = await cloud.client.from("organizations").insert({ name: state.settings.chapterName, created_by: cloud.user.id }).select("id").single();
   if (orgError) throw orgError;
   const { error: memberError } = await cloud.client.from("organization_members").insert({ organization_id: org.id, user_id: cloud.user.id, role: "admin", email: cloud.user.email });
@@ -345,7 +345,7 @@ async function loadCloudWorkspace(options = {}) {
     save();
   } catch (err) {
     logSupabaseError("load workspace failed", err);
-    toast(formatSupabaseError(err, "Could not load cloud workspace."));
+    toast(formatSupabaseError(err, "Could not load chapter data."));
     if (options.throwOnError) throw err;
   }
 }
@@ -356,10 +356,10 @@ async function syncCloudWorkspace(showToast = true) {
     state = normalize(state);
     const { error } = await cloud.client.from("workspace_state").upsert({ organization_id: organizationId, data: state, updated_by: cloud.user.id, updated_at: new Date().toISOString() }, { onConflict: "organization_id" });
     if (error) throw error;
-    if (showToast) toast("Cloud workspace synced.");
+    if (showToast) toast("Changes synced.");
   } catch (err) {
     logSupabaseError("cloud sync failed", err);
-    toast(formatSupabaseError(err, "Cloud sync failed."));
+    toast(formatSupabaseError(err, "Sync failed."));
   }
 }
 
@@ -677,8 +677,8 @@ const collectionMeta = {
     title: "Member roster",
     permission: "manage_members",
     addLabel: "Add member",
-    emptyTitle: "No members added yet.",
-    emptyText: "Add your first member or import a roster to begin building the Alpha Omega database.",
+    emptyTitle: "No members added",
+    emptyText: "Add a member manually or import the chapter roster.",
     search: ["firstName", "lastName", "phone", "email", "schoolYear", "major", "hometown", "memberStatus", "initiationStatus", "officerRole", "committee", "duesStatus", "tags"],
     columns: ["name", "phone", "email", "schoolYear", "memberStatus", "initiationStatus", "officerRole", "committee", "duesStatus", "lifecycle"],
     fields: [
@@ -692,8 +692,8 @@ const collectionMeta = {
     title: "PNM tracking",
     permission: "manage_recruitment",
     addLabel: "Add PNM",
-    emptyTitle: "No PNMs added yet.",
-    emptyText: "Add a potential new member when recruitment starts, or import a PNM list.",
+    emptyTitle: "No PNMs added",
+    emptyText: "Add a potential new member or import a recruitment list.",
     search: ["firstName", "lastName", "phone", "email", "hometown", "major", "schoolYear", "referralSource", "referredBy", "assignedRecruiter", "status", "tags"],
     columns: ["name", "phone", "email", "schoolYear", "referralSource", "assignedRecruiter", "status", "followUpDate"],
     fields: [
@@ -706,8 +706,8 @@ const collectionMeta = {
     title: "Events and attendance",
     permission: "manage_events",
     addLabel: "Add event",
-    emptyTitle: "No events added yet.",
-    emptyText: "Add your first chapter event, then mark attendance from a phone or laptop.",
+    emptyTitle: "No events added",
+    emptyText: "Create an event to begin tracking attendance.",
     search: ["name", "date", "location", "type", "required", "description", "notes"],
     columns: ["name", "date", "time", "location", "type", "required", "memberAttendanceCount", "pnmAttendanceCount"],
     fields: [
@@ -719,8 +719,8 @@ const collectionMeta = {
     title: "Treasurer dues ledger",
     permission: "manage_finance",
     addLabel: "Add dues charge / payment",
-    emptyTitle: "No dues records yet.",
-    emptyText: "Create a dues charge for one member, bill multiple members, or import existing balances.",
+    emptyTitle: "No finance records available",
+    emptyText: "Import balances or add the first charge.",
     search: ["type", "memberId", "category", "status", "paymentMethod", "notes", "treasurerNotes"],
     columns: ["type", "memberId", "amount", "status", "dueDate", "paymentDate", "paymentMethod", "balanceAfter", "treasurerNotes"],
     fields: [
@@ -733,8 +733,8 @@ const collectionMeta = {
     title: "Officer tasks and follow-ups",
     permission: "manage_tasks",
     addLabel: "Create task",
-    emptyTitle: "No tasks created yet.",
-    emptyText: "Create a task for dues follow-up, event logistics, reports, roster cleanup, or officer work.",
+    emptyTitle: "No tasks created",
+    emptyText: "Create an action item for chapter follow-up.",
     search: ["title", "description", "assignedPerson", "priority", "status", "relatedType", "notes"],
     columns: ["title", "assignedPerson", "dueDate", "priority", "status", "relatedType", "notes"],
     fields: [
@@ -748,7 +748,7 @@ function render() {
   document.getElementById("viewTitle").textContent = viewNames[activeView];
   document.getElementById("orgLabel").textContent = `${state.settings.chapterName} · ${state.settings.schoolName}`;
   document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.view === activeView));
-  document.getElementById("resetBtn").textContent = "Clear workspace";
+  document.getElementById("resetBtn").textContent = "Clear local data";
   const root = document.getElementById("appRoot");
   if (cloud.client && !cloud.user) {
     root.innerHTML = renderLoginGate();
@@ -776,12 +776,31 @@ function render() {
   bindAuthActions(root);
 }
 
+function renderPageHeader(title, subtitle = "", actions = []) {
+  return `<section class="page-header">
+    <div>
+      <h3>${safe(title)}</h3>
+      ${subtitle ? `<p>${safe(subtitle)}</p>` : ""}
+    </div>
+    ${actions.length ? `<div class="button-row">${actions.map(([label, style, target]) => renderHeaderAction(label, style, target)).join("")}</div>` : ""}
+  </section>`;
+}
+
+function renderHeaderAction(label, style = "ghost", target = "") {
+  if (target.endsWith(":add")) return `<button class="${safe(style)}" data-add="${safe(target.split(":")[0])}">${safe(label)}</button>`;
+  if (target.endsWith(":import")) return `<button class="${safe(style)}" data-import="${safe(target.split(":")[0])}">${safe(label)}</button>`;
+  if (target.startsWith("export:")) return `<button class="${safe(style)}" data-export="${safe(target.split(":")[1])}">${safe(label)}</button>`;
+  if (target === "print") return `<button class="${safe(style)}" data-print>${safe(label)}</button>`;
+  return `<button class="${safe(style)}" data-go="${safe(target)}">${safe(label)}</button>`;
+}
+
 function renderLoginGate() {
   return `<section class="auth-shell">
     <div class="auth-card">
-      <p class="eyebrow">Private chapter operations</p>
-      <h3>Sign in to Alpha Omega Chapter Operations</h3>
-      <p class="muted">Use your email and password. Supabase handles password storage and sessions securely.</p>
+      <p class="eyebrow">ChapterOps</p>
+      <h3>Alpha Omega Chapter</h3>
+      <p class="muted">Kansas State University · Pi Kappa Alpha</p>
+      <p>Sign in to access chapter operations.</p>
       <form id="loginForm" class="auth-form">
         <label>Email address<input name="email" type="email" autocomplete="email" placeholder="name@email.com" required /></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
@@ -792,21 +811,6 @@ function renderLoginGate() {
         <button class="ghost" data-auth-mode="reset">Forgot password</button>
       </div>
     </div>
-  </section>
-  <section class="hero">
-    <div>
-      <p class="eyebrow">Privacy first</p>
-      <h3>Chapter data stays behind login.</h3>
-      <p>This workspace can contain member records, dues, payments, attendance, tasks, and notes. For privacy, chapter data is not shown until you sign in.</p>
-    </div>
-    <div class="hero-actions">
-      <button class="primary" data-auth-mode="signin">Sign in</button>
-      <button class="ghost" data-auth-mode="signup">Request access</button>
-    </div>
-  </section>
-  <section class="panel">
-    <div class="panel-head"><h3>Ready for real setup</h3><span class="pill">Kansas State · Alpha Omega PIKE</span></div>
-    <p class="muted">After login, complete setup and start entering or importing the real roster and dues records with the Treasurer.</p>
   </section>`;
 }
 
@@ -838,19 +842,11 @@ function renderDashboard() {
   const m = metrics();
   const needsSetup = !state.settings.setupComplete || !state.settings.term || !state.settings.academicYear;
   return `
+    ${renderPageHeader("Alpha Omega Chapter Operations", "Kansas State University · Pi Kappa Alpha", [
+      needsSetup ? ["Complete Setup", "primary", "settings"] : ["Add Member", "primary", "members:add"],
+      ["Import Roster", "ghost", "members:import"]
+    ])}
     ${needsSetup ? renderSetupPrompt() : ""}
-    <section class="hero">
-      <div>
-        <p class="eyebrow">Real Alpha Omega workspace</p>
-        <h3>Ready for Kansas State PIKE chapter operations.</h3>
-        <p>No sample chapter records are seeded. Start by completing setup, then add or import the real roster and dues records with the Treasurer.</p>
-      </div>
-      <div class="hero-actions">
-        <button class="primary" data-go="settings">Finish setup</button>
-        <button class="primary" data-add="members">Add member</button>
-        <button class="ghost" data-import="members">Import roster</button>
-      </div>
-    </section>
     <div class="kpi-grid">
       ${metricCard("Active members", m.members, "members")}
       ${metricCard("New members", m.newMembers, "members", "memberStatus=New Member")}
@@ -875,7 +871,7 @@ function renderDashboard() {
       ${listPanel("Recent activity", state.activity.slice(0, 8).map((a) => `${new Date(a.at).toLocaleString()}<span>${safe(a.action)}</span>`), "reports")}
     </div>
     <section class="panel">
-      <div class="panel-head"><h3>Quick actions</h3><span class="pill">Built for Treasurer + exec entry</span></div>
+      <div class="panel-head"><h3>Quick actions</h3></div>
       <div class="quick-grid">
         <button class="action-tile" data-add="members">Add member</button>
         <button class="action-tile" data-import="members">Import roster</button>
@@ -889,9 +885,16 @@ function renderDashboard() {
 }
 
 function renderSetupPrompt() {
-  return `<section class="panel setup-panel">
-    <div class="panel-head"><div><p class="eyebrow">First-time setup</p><h3>Configure Alpha Omega before entering real data.</h3></div><button class="primary" data-go="settings">Open setup</button></div>
-    <p class="muted">Set term, academic year, default dues amount, due dates, roles, committees, and permissions. The app stays useful even while every data table is empty.</p>
+  const steps = [
+    Boolean(state.settings.chapterName && state.settings.schoolName),
+    Boolean(state.settings.term),
+    Boolean(state.settings.academicYear),
+    Boolean(state.settings.defaultDuesAmount),
+    Boolean(state.settings.officerRoles?.length)
+  ];
+  const complete = steps.filter(Boolean).length;
+  return `<section class="panel setup-panel compact-panel">
+    <div class="panel-head"><div><p class="eyebrow">Setup</p><h3>Chapter setup</h3><p class="muted">${complete} of ${steps.length} steps complete</p></div><button class="primary" data-go="settings">Continue setup</button></div>
   </section>`;
 }
 
@@ -919,8 +922,8 @@ function renderCollection(key) {
   const meta = collectionMeta[key];
   const rows = filteredRows(key);
   return `<section class="panel">
-    <div class="panel-head">
-      <div><p class="eyebrow">${key === "finance" ? "Treasurer module" : "Chapter module"}</p><h3>${meta.title}</h3></div>
+    <div class="panel-head page-panel-head">
+      <div><h3>${safe(pageTitleForKey(key))}</h3><p class="muted">${safe(pageSubtitleForKey(key))}</p></div>
       <div class="button-row">
         <input class="search" id="searchInput" placeholder="Search ${meta.title.toLowerCase()}" value="${safe(activeFilters[key]?.q || "")}" />
         <button class="ghost" data-import="${key}">Import CSV</button>
@@ -933,6 +936,20 @@ function renderCollection(key) {
     ${key === "pnms" ? renderRecruitmentSummary() : ""}
     ${renderTable(key, rows)}
   </section>`;
+}
+
+function pageTitleForKey(key) {
+  return { members: "Members", pnms: "Recruitment", events: "Attendance", finance: "Finance", tasks: "Tasks" }[key] || collectionMeta[key]?.title || labelize(key);
+}
+
+function pageSubtitleForKey(key) {
+  return {
+    members: "Manage the active chapter roster and member information.",
+    pnms: "Track potential new members, events, and bids.",
+    events: "Manage event attendance and participation.",
+    finance: "Track chapter charges, balances, payments, and plans.",
+    tasks: "Assign and monitor chapter action items."
+  }[key] || "";
 }
 
 function renderFinanceLedger() {
@@ -951,8 +968,8 @@ function renderFinanceLedger() {
     ["nocharge", "No current charge"]
   ];
   return `<section class="panel finance-ledger">
-    <div class="panel-head">
-      <div><p class="eyebrow">Treasurer module</p><h3>Member billing ledger</h3><p class="muted">One current finance row per active member. Total Balance = Pending Charge + Current Balance.</p></div>
+    <div class="panel-head page-panel-head">
+      <div><h3>Finance</h3><p class="muted">Member balances, charges, payments, and payment plans.</p></div>
       <div class="button-row">
         <input class="search" id="searchInput" placeholder="Search name, member ID, status, balances" value="${safe(filter.q || "")}" />
         <button class="ghost" data-import="finance">Import Finance CSV</button>
@@ -972,10 +989,10 @@ function renderFinanceTotals(title, totals) {
   return `<section class="treasurer-dash finance-totals">
     <p class="eyebrow">${safe(title)}</p>
     <div class="mini-grid">
-      ${mini("Total Pending Charges", moneyFromCents(totals.pending))}
-      ${mini("Total Current Balances", moneyFromCents(totals.current))}
-      ${mini("Total Outstanding Balance", moneyFromCents(totals.outstanding))}
-      ${mini("Members with Balance", totals.withBalance)}
+      ${mini("Pending Charges", moneyFromCents(totals.pending))}
+      ${mini("Current Balances", moneyFromCents(totals.current))}
+      ${mini("Total Outstanding", moneyFromCents(totals.outstanding))}
+      ${mini("With Balance", totals.withBalance)}
       ${mini("Paid in Full", totals.paidInFull)}
       ${mini("Credits", totals.credits)}
       ${mini("Payment Plans", totals.paymentPlans)}
@@ -1003,9 +1020,9 @@ function renderFinanceLedgerTable(rows) {
     ["pendingChargeCents", "Pending Charge"],
     ["paymentPlanStatus", "Payment Plan"],
     ["currentBalanceCents", "Current Balance"],
-    ["totalBalanceCents", "Total Balance"]
+    ["totalBalanceCents", "Total Balance", "Pending charges plus current balance"]
   ];
-  return `<div class="table-wrap finance-table-wrap"><table class="finance-ledger-table"><thead><tr>${cols.map(([key, label]) => `<th><button class="th-sort" data-finance-sort="${key}">${safe(label)}${financeSort.key === key ? ` ${financeSort.dir === "asc" ? "▲" : "▼"}` : ""}</button></th>`).join("")}<th>Actions</th></tr></thead><tbody>
+  return `<div class="table-wrap finance-table-wrap"><table class="finance-ledger-table"><thead><tr>${cols.map(([key, label, title]) => `<th title="${safe(title || "")}"><button class="th-sort" data-finance-sort="${key}">${safe(label)}${financeSort.key === key ? ` ${financeSort.dir === "asc" ? "▲" : "▼"}` : ""}</button></th>`).join("")}<th>Actions</th></tr></thead><tbody>
     ${rows.map((row) => `<tr data-finance-member="${safe(row.memberId)}">
       ${cols.map(([key, label]) => `<td data-label="${safe(label)}">${formatFinanceCell(row, key)}</td>`).join("")}
       <td data-label="Actions"><div class="row-actions">${actionAllowed("finance") ? `<button class="small ghost" data-edit-finance="${safe(row.memberId)}">Edit ledger</button><button class="small ghost" data-record-payment="${safe(row.memberId)}">Record payment</button>` : `<button class="small ghost" data-view-finance="${safe(row.memberId)}">View</button>`}</div></td>
@@ -1027,8 +1044,8 @@ function formatFinanceCell(row, key) {
 }
 
 function renderFinanceEmptyState() {
-  if (!activeMembers().length) return `<div class="empty-state"><h3>No active members yet.</h3><p>Add or import your member roster first, then this ledger will show one finance row per member.</p><div class="button-row centered"><button class="primary" data-go="members">Go to members</button><button class="ghost" data-import="members">Import roster</button></div></div>`;
-  return `<div class="empty-state"><h3>No members match these finance filters.</h3><p>Clear filters, import finance balances, or edit a member ledger row.</p><div class="button-row centered"><button class="primary" data-finance-filter="all">Show all members</button><button class="ghost" data-import="finance">Import finance CSV</button></div></div>`;
+  if (!activeMembers().length) return `<div class="empty-state"><h3>No members added</h3><p>Add members before entering balances.</p><div class="button-row centered"><button class="primary" data-go="members">Open Members</button><button class="ghost" data-import="members">Import Roster</button></div></div>`;
+  return `<div class="empty-state"><h3>No finance rows match</h3><p>Adjust filters or import balances.</p><div class="button-row centered"><button class="primary" data-finance-filter="all">Clear Filters</button><button class="ghost" data-import="finance">Import Finance</button></div></div>`;
 }
 
 function actionAllowed(key) {
@@ -1145,18 +1162,18 @@ function renderLeadership() {
   const directory = buildOfficerDirectory();
   const hasRows = directory.allOfficers.length;
   return `<section class="panel">
-    <div class="panel-head"><div><p class="eyebrow">Executive Team</p><h3>Alpha Omega executive leadership</h3><p class="muted">Every active officer assignment is treated as an Executive Team position. VPMD is the formal title; Brotherhood is its responsibility label, not Recruitment.</p></div><button class="primary" data-add-leadership>Add executive role</button></div>
+    <div class="panel-head page-panel-head"><div><h3>Executive Team</h3><p class="muted">Current chapter leadership and officer assignments.</p></div><button class="primary" data-add-leadership>Add Role</button></div>
     ${hasRows ? `
-      ${renderOfficerSection("Executive Team", directory.executiveOfficers, "Each Executive Team member appears once, with all assigned executive titles on one card.")}
+      ${renderOfficerSection("Current Officers", directory.executiveOfficers, "")}
       ${renderLeadershipRoster()}
-    ` : `<div class="empty-state"><h3>No Executive Team roles assigned yet.</h3><p>Add real Alpha Omega executive roles once the roster is entered. No demo officers are seeded.</p><button class="primary" data-add-leadership>Add first executive role</button></div>`}
+    ` : `<div class="empty-state"><h3>No Executive Team roles assigned</h3><p>Add officer assignments to build the leadership directory.</p><button class="primary" data-add-leadership>Add Role</button></div>`}
   </section>`;
 }
 
 function renderOfficerSection(title, officers, emptyText) {
   if (!officers.length) return "";
   return `<section class="leadership-section">
-    <div class="section-head"><h4>${safe(title)}</h4><p>${safe(emptyText)}</p></div>
+    <div class="section-head"><h4>${safe(title)}</h4>${emptyText ? `<p>${safe(emptyText)}</p>` : ""}</div>
     <div class="card-grid">${officers.map(renderOfficerCard).join("")}</div>
   </section>`;
 }
@@ -1185,7 +1202,7 @@ function renderLeadershipRoster() {
   const members = activeMembers();
   if (!members.length) return "";
   return `<section class="leadership-section">
-    <div class="section-head"><h4>All Members</h4><p>Officers remain in the normal chapter roster. Holding a position does not remove anyone from the member list.</p></div>
+    <div class="section-head"><h4>Roster View</h4></div>
     <div class="table-wrap"><table><thead><tr><th>Name</th><th>Officer role</th><th>Committee</th><th>Status</th></tr></thead><tbody>
       ${members.map((m) => `<tr data-open="members" data-id="${safe(m.id)}"><td data-label="Name"><button class="linklike">${safe(memberName(m.id))}</button></td><td data-label="Officer role">${safe(m.officerRole || "—")}</td><td data-label="Committee">${safe(m.committee || "—")}</td><td data-label="Status">${safe(m.memberStatus || m.lifecycle || "Active")}</td></tr>`).join("")}
     </tbody></table></div>
@@ -1198,7 +1215,7 @@ function renderReports() {
   const reportsEmpty = !state.members.length && !state.finance.length && !state.events.length && !state.tasks.length;
   return `<section class="panel printable">
     <div class="panel-head"><div><p class="eyebrow">Reports</p><h3>Executive and Treasurer reports</h3></div><div class="button-row"><button class="ghost" data-export="reports">Export summary CSV</button><button class="primary" data-print>PDF / Print</button></div></div>
-    ${reportsEmpty ? `<div class="empty-state"><h3>Reports will populate once real data is entered.</h3><p>Add members, dues charges, payments, events, attendance, and tasks to generate useful reports.</p><div class="button-row centered"><button class="primary" data-go="members">Add members</button><button class="ghost" data-go="finance">Open dues tracker</button></div></div>` : ""}
+    ${reportsEmpty ? `<div class="empty-state"><h3>Reports will populate once data is entered.</h3><p>Add members, dues charges, payments, events, attendance, and tasks to generate useful reports.</p><div class="button-row centered"><button class="primary" data-go="members">Add members</button><button class="ghost" data-go="finance">Open finance</button></div></div>` : ""}
     <div class="mini-grid">
       ${mini("Member roster", state.members.filter((m) => !m.archived).length)}
       ${mini("Dues report", money(m.totalBilled))}
@@ -1250,11 +1267,11 @@ function renderKpiReports() {
   const selectedId = activeFilters.kpis?.meetingId || meetings[0]?.id || "";
   const meeting = meetings.find((m) => m.id === selectedId);
   return `<section class="panel kpi-page printable">
-    <div class="panel-head">
-      <div><p class="eyebrow">KPI Reports</p><h3>Recurring chapter KPI meeting reports</h3><p class="muted">One report section is generated per active Executive Team position. VPMD and Brotherhood share one section: VPMD — Brotherhood. Recruitment stays separate.</p></div>
+    <div class="panel-head page-panel-head">
+      <div><h3>KPI Reports</h3><p class="muted">Track executive goals, results, blockers, and follow-up actions.</p></div>
       <div class="button-row">
-        ${canManageKpis() ? `<button class="primary" data-create-kpi-meeting>Create KPI meeting</button><button class="ghost" data-add-kpi-definition>Add KPI</button>` : ""}
-        <button class="ghost" data-export="kpis">Export KPI CSV</button>
+        ${canManageKpis() ? `<button class="primary" data-create-kpi-meeting>New KPI Meeting</button><button class="ghost" data-add-kpi-definition>Add KPI</button>` : ""}
+        <button class="ghost" data-export="kpis">Export Report</button>
         <button class="ghost" data-print>Print / PDF</button>
       </div>
     </div>
@@ -1265,7 +1282,7 @@ function renderKpiReports() {
 
 function renderKpiEmptyState() {
   const positions = activeExecutivePositions();
-  return `<div class="empty-state"><h3>No KPI meetings created yet.</h3><p>Create the first real KPI meeting when Alpha Omega is ready. No demo KPI meetings or fake reports are seeded.</p><p class="muted">${positions.length ? `${positions.length} Executive Team positions are ready for report sections.` : "Add Executive Team roles first so meeting sections can be generated."}</p><div class="button-row centered">${canManageKpis() ? `<button class="primary" data-create-kpi-meeting>Create first KPI meeting</button><button class="ghost" data-go="leadership">Review Executive Team</button>` : `<button class="ghost" data-go="leadership">Review Executive Team</button>`}</div></div>`;
+  return `<div class="empty-state"><h3>No KPI meetings yet</h3><p>Create the first meeting to collect executive updates and action items.</p><div class="button-row centered">${canManageKpis() ? `<button class="primary" data-create-kpi-meeting>Create KPI Meeting</button><button class="ghost" data-go="leadership">Executive Team</button>` : `<button class="ghost" data-go="leadership">Executive Team</button>`}</div></div>`;
 }
 
 function renderKpiMeetingPicker(meetings, selectedId) {
@@ -1309,7 +1326,7 @@ function renderSelectedKpiMeeting(meeting) {
 function renderKpiMeetingTable(meeting, reports) {
   if (!reports.length) return `<div class="empty-state"><h3>No Executive Team positions found.</h3><p>Add Executive Team roles before generating KPI report sections.</p><button class="primary" data-go="leadership">Open Executive Team</button></div>`;
   return `<section class="leadership-section">
-    <div class="section-head"><h4>Position report sections</h4><p>One row per executive position. VPMD — Brotherhood and Recruitment are separate rows.</p></div>
+    <div class="section-head"><h4>Executive Reports</h4></div>
     <div class="table-wrap"><table><thead><tr><th>Executive Position</th><th>Officer</th><th>Report Status</th><th>On Track</th><th>At Risk</th><th>Off Track</th><th>Blockers</th><th>Follow-Up Actions</th><th>Last Updated</th><th>Actions</th></tr></thead><tbody>
       ${reports.map((report) => renderKpiReportRow(meeting, report)).join("")}
     </tbody></table></div>
@@ -1337,15 +1354,15 @@ function renderKpiReportRow(meeting, report) {
 function renderKpiDefinitionsPanel() {
   const definitions = (state.kpiDefinitions || []).filter((k) => k.isActive !== false).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
   return `<section class="leadership-section">
-    <div class="section-head"><h4>Configured KPIs</h4><p>Authorized users can add configurable KPIs by executive position. Historical report results retain the KPI name and target snapshot.</p></div>
-    ${definitions.length ? `<div class="table-wrap"><table><thead><tr><th>Position</th><th>KPI</th><th>Type</th><th>Target</th><th>Direction</th><th>Status</th></tr></thead><tbody>${definitions.map((k) => `<tr><td data-label="Position">${safe(displayPosition(k.position))}</td><td data-label="KPI">${safe(k.name)}</td><td data-label="Type">${safe(k.valueType)}</td><td data-label="Target">${safe(k.targetValue || "—")}</td><td data-label="Direction">${safe(k.direction || "Informational")}</td><td data-label="Status">${k.isActive === false ? "Inactive" : "Active"}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state"><h3>No KPIs configured yet.</h3><p>Add real KPIs when the Executive Team decides what to track. Meetings can still be created first.</p>${canManageKpis() ? `<button class="primary" data-add-kpi-definition>Add first KPI</button>` : ""}</div>`}
+    <div class="section-head"><h4>Configured KPIs</h4></div>
+    ${definitions.length ? `<div class="table-wrap"><table><thead><tr><th>Position</th><th>KPI</th><th>Type</th><th>Target</th><th>Direction</th><th>Status</th></tr></thead><tbody>${definitions.map((k) => `<tr><td data-label="Position">${safe(displayPosition(k.position))}</td><td data-label="KPI">${safe(k.name)}</td><td data-label="Type">${safe(k.valueType)}</td><td data-label="Target">${safe(k.targetValue || "—")}</td><td data-label="Direction">${safe(k.direction || "Informational")}</td><td data-label="Status">${k.isActive === false ? "Inactive" : "Active"}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty-state"><h3>No KPIs configured</h3><p>Add the metrics your Executive Team wants to review.</p>${canManageKpis() ? `<button class="primary" data-add-kpi-definition>Add KPI</button>` : ""}</div>`}
   </section>`;
 }
 
 function renderKpiHistory(selectedId) {
   const meetings = (state.kpiMeetings || []).filter((m) => m.id !== selectedId && m.status !== "Archived").sort((a, b) => String(b.meetingDate || "").localeCompare(String(a.meetingDate || ""))).slice(0, 8);
   return `<section class="leadership-section">
-    <div class="section-head"><h4>Meeting history</h4><p>Open previous KPI meetings, compare periods, or copy a previous meeting to start the next one.</p></div>
+    <div class="section-head"><h4>Meeting History</h4></div>
     ${meetings.length ? `<div class="stack-list">${meetings.map((m) => `<button class="stack-item" data-select-kpi-meeting="${safe(m.id)}">${safe(m.title || "KPI Meeting")}<span>${safe(m.meetingDate || "")} · ${safe(m.status || "Draft")}</span></button>`).join("")}</div>` : emptySmall("No previous KPI meetings yet.")}
   </section>`;
 }
@@ -1415,7 +1432,7 @@ function openKpiMeetingForm(id = "") {
     <label>Status<select name="status">${["Draft", "Open", "Completed", "Archived"].map((s) => `<option ${existing?.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></label>
     <label>Reporting period start<input name="reportingPeriodStart" type="date" value="${safe(existing?.reportingPeriodStart || "")}" /></label>
     <label>Reporting period end<input name="reportingPeriodEnd" type="date" value="${safe(existing?.reportingPeriodEnd || "")}" /></label>
-    <div class="wide notice"><strong>Generated sections</strong><p>Saving creates one report section per active Executive Team position. VPMD/Brotherhood is one section; Recruitment is separate.</p></div>
+    <div class="wide notice"><strong>Meeting setup</strong><p>Review the meeting details before saving.</p></div>
     <div class="wide button-row"><button class="primary">Save meeting</button><button class="ghost" type="button" data-close-modal>Cancel</button></div>
   </form>`);
   document.getElementById("kpiMeetingForm").addEventListener("submit", async (ev) => {
@@ -1428,7 +1445,7 @@ function openKpiMeetingForm(id = "") {
     if (!existing) state.kpiMeetings.unshift(meeting);
     ensureKpiReportsForMeeting(meeting, true);
     activeFilters.kpis = { meetingId: meeting.id };
-    await persistWorkspace("KPI meeting saved to Supabase.");
+    await persistWorkspace("KPI meeting saved.");
     closeModal();
     render();
   });
@@ -1455,7 +1472,7 @@ function openKpiDefinitionForm(id = "") {
     const row = { ...form, position: canonicalPositionTitle(form.position), isActive: form.isActive === "true", displayOrder: Number(form.displayOrder || 0), updatedAt: now };
     snapshot(existing ? "KPI definition edited" : "KPI definition added", { type: "kpis", id });
     if (existing) Object.assign(existing, row); else state.kpiDefinitions.unshift({ id: uid("kpid"), ...row, createdAt: now });
-    await persistWorkspace("KPI definition saved to Supabase.");
+    await persistWorkspace("KPI definition saved.");
     closeModal();
     render();
   });
@@ -1563,7 +1580,7 @@ async function saveKpiReport(report, form, definitions, status) {
     });
   }
   snapshot(status === "Submitted" ? "KPI report submitted" : "KPI report draft saved", { type: "kpis", id: report.id, description: displayPosition(report.position) });
-  await persistWorkspace(status === "Submitted" ? "KPI report submitted to Supabase." : "KPI draft saved to Supabase.");
+  await persistWorkspace(status === "Submitted" ? "KPI report submitted." : "KPI draft saved.");
   closeModal();
   render();
 }
@@ -1580,12 +1597,12 @@ async function copyKpiMeeting(id) {
     unresolved.forEach((a) => state.kpiActionItems.unshift({ ...a, id: uid("kpia"), kpiMeetingId: copy.id, positionReportId: "", createdAt: now, updatedAt: now }));
   }
   snapshot("KPI meeting copied", { type: "kpis", id });
-  await persistWorkspace("KPI meeting copied to Supabase.");
+  await persistWorkspace("KPI meeting copied.");
   activeFilters.kpis = { meetingId: copy.id };
   render();
 }
 
-async function persistWorkspace(successMessage = "Saved to Supabase.") {
+async function persistWorkspace(successMessage = "Saved.") {
   save();
   if (cloud.user) {
     await syncCloudWorkspace(false);
@@ -1623,9 +1640,9 @@ function renderSettings() {
       <label class="wide">Privacy notice<textarea id="set_privacyNotice">${safe(state.settings.privacyNotice)}</textarea></label>
     </div>
     <div class="settings-grid">
-      <div class="notice"><h4>Security</h4><p>Login is required for cloud sync. Supabase RLS protects workspace rows, and the frontend never ships a service-role key.</p></div>
-      <div class="notice"><h4>Financial access</h4><p>Finance pages are restricted to Admin, Treasurer, Assistant Treasurer, and President roles unless permissions are expanded later.</p></div>
-      <div class="notice"><h4>Empty workspace</h4><p>No sample members, dues, PNMs, or events are seeded. Use Add or Import to enter Alpha Omega’s real records.</p></div>
+      <div class="notice"><h4>Security</h4><p>Only approved users can access chapter records.</p></div>
+      <div class="notice"><h4>Financial access</h4><p>Finance tools are limited to authorized chapter roles.</p></div>
+      <div class="notice"><h4>Imports</h4><p>Use CSV imports to add rosters, balances, and attendance records.</p></div>
     </div>
   </section>
   ${can("all") ? renderAdminUserManagement() : ""}`;
@@ -1755,13 +1772,13 @@ function bindAuthActions(root = document) {
 }
 
 function openAuthModal(mode = "signin") {
-  if (!cloud.client) return toast("Supabase is not configured.");
+  if (!cloud.client) return toast("Cloud sync is not configured.");
   const isSignup = mode === "signup";
   const isReset = mode === "reset";
   openModal(`<section class="auth-modal">
     <p class="eyebrow">${isSignup ? "Request access" : isReset ? "Password reset" : "Sign in"}</p>
     <h3>${isSignup ? "Request a ChapterOps account" : isReset ? "Reset your password" : "Sign in to ChapterOps"}</h3>
-    <p class="muted">${isSignup ? "Use an email and password. If email confirmation is enabled, Supabase will send a confirmation email." : isReset ? "Enter your email and Supabase will send a secure reset link." : "Enter the email and password for your ChapterOps account."}</p>
+    <p class="muted">${isSignup ? "Use an email and password. You may need to confirm your email before signing in." : isReset ? "Enter your email and we will send a secure reset link." : "Enter the email and password for your ChapterOps account."}</p>
     <form id="authModalForm" class="form-grid">
       ${isSignup ? `<label class="wide">Full name<input name="fullName" autocomplete="name" /></label>` : ""}
       <label class="wide">Email address<input name="email" type="email" autocomplete="email" placeholder="name@email.com" required /></label>
@@ -1937,9 +1954,9 @@ async function archiveMemberInCloud(memberId) {
   const hasHistory = deps.finance || deps.attendance || deps.tasks || deps.leadership;
   const message = hasHistory
     ? `${memberName(memberId)} has linked records (${deps.finance} finance, ${deps.attendance} attendance, ${deps.tasks} tasks, ${deps.leadership} officer assignments). They will be archived and removed from active rosters, while historical records are preserved. Continue?`
-    : `Remove ${memberName(memberId)} from the active roster? This archives the member in Supabase.`;
+    : `Remove ${memberName(memberId)} from the active roster? This archives the member and preserves chapter history.`;
   if (!confirm(message)) return;
-  if (!cloud.client) return toast("Supabase is not configured.");
+  if (!cloud.client) return toast("Cloud sync is not configured.");
   pendingDeletes.add(`members:${memberId}`);
   render();
   try {
@@ -2065,7 +2082,7 @@ function cleanFinanceAccountForm(memberId, formData) {
 
 async function saveFinanceAccounts(accounts, successMessage = "Finance ledger saved.", options = {}) {
   if (!accounts.length) return;
-  if (!cloud.client) return toast("Supabase is not configured for finance persistence.");
+  if (!cloud.client) return toast("Cloud sync is not configured for finance.");
   try {
     const { data: sessionData, error: sessionError } = await cloud.client.auth.getSession();
     if (sessionError) throw sessionError;
@@ -2232,7 +2249,7 @@ async function saveSettingsForm() {
     return;
   }
   if (!cloud.client) {
-    setupSave.error = "Supabase is not configured for this deployment.";
+    setupSave.error = "Cloud sync is not configured for this deployment.";
     render();
     return;
   }
@@ -2280,7 +2297,7 @@ async function saveSettingsForm() {
     await ensureOwnProfile();
     if (cloud.profile?.approval_status === "approved") state.settings.currentRole = cloud.profile.role || "Admin";
     await loadCloudWorkspace({ throwOnError: true });
-    setupSave = { saving: false, error: "", success: "Your chapter setup was saved to Supabase and reloaded from the database.", fieldErrors: {} };
+    setupSave = { saving: false, error: "", success: "Chapter setup saved successfully.", fieldErrors: {} };
     save();
     render();
     toast("Chapter setup saved successfully.");
@@ -2296,7 +2313,7 @@ function openLeadershipForm(id) {
   const existing = state.leadership.find((l) => l.id === id);
   const normalizedExisting = existing ? { ...existing, role: canonicalPositionTitle(existing.role), responsibilityLabel: existing.responsibilityLabel || positionResponsibilityLabel(canonicalPositionTitle(existing.role), existing.role) } : null;
   const fields = [["role", "Formal executive position", "select", "officerRoles"], ["assignedMember", "Assigned member", "select", "members"], ["responsibilityLabel", "Plain-language responsibility label", "text"], ["committee", "Committee", "select", "committees"], ["termStartDate", "Term start date", "date"], ["termEndDate", "Term end date", "date"], ["responsibilities", "Responsibilities", "textarea"], ["relatedReports", "Related reports", "text"]];
-  openModal(`<h3>${existing ? "Edit Executive Team role" : "Add Executive Team role"}</h3><form id="leadershipForm" class="form-grid">${fields.map((f) => formField(f, normalizedExisting)).join("")}<div class="wide notice"><strong>VPMD / Brotherhood rule</strong><p>Choose VPMD for the formal position. Use Brotherhood as the plain-language responsibility label. Recruitment stays separate.</p></div><div class="wide button-row"><button class="primary">Save</button><button class="ghost" type="button" data-close-modal>Cancel</button></div></form>`);
+  openModal(`<h3>${existing ? "Edit Executive Team role" : "Add Executive Team role"}</h3><form id="leadershipForm" class="form-grid">${fields.map((f) => formField(f, normalizedExisting)).join("")}<div class="wide button-row"><button class="primary">Save</button><button class="ghost" type="button" data-close-modal>Cancel</button></div></form>`);
   document.getElementById("leadershipForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const row = Object.fromEntries(new FormData(ev.currentTarget).entries());
@@ -2332,7 +2349,7 @@ function importFile(file) {
   reader.onload = () => {
     try {
       if (file.name.endsWith(".json")) {
-        if (!confirm("Import full JSON backup? This will replace the current local workspace.")) return;
+        if (!confirm("Import full JSON backup? This will replace local data in this browser.")) return;
         snapshot("Workspace backup imported", { type: "import" });
         state = normalize(JSON.parse(reader.result));
         save(); render(); toast("Workspace imported.");
@@ -2435,7 +2452,7 @@ async function importMembersCsv(rows) {
   renderImportPreview();
 
   try {
-    if (!cloud.client) throw new Error("Supabase is not configured for this deployment.");
+    if (!cloud.client) throw new Error("Cloud sync is not configured for this deployment.");
     const { data: sessionData, error: sessionError } = await cloud.client.auth.getSession();
     if (sessionError) throw sessionError;
     cloud.user = sessionData.session?.user || cloud.user;
@@ -2469,7 +2486,7 @@ async function importMembersCsv(rows) {
     importState.error = "";
     render();
     renderImportPreview();
-    toast("Member import saved to Supabase.");
+    toast("Member import saved.");
   } catch (err) {
     logSupabaseError("member CSV import failed", err);
     importState.importing = false;
@@ -2497,7 +2514,7 @@ async function importFinanceCsv() {
       notes: row.notes || "",
       financialStatus: row.totalBalanceCents > 0 ? "Outstanding" : row.totalBalanceCents < 0 ? "Credit" : "Paid in full"
     }));
-    const result = await saveFinanceAccounts(accounts, "Finance import saved to Supabase.", { closeModal: false });
+    const result = await saveFinanceAccounts(accounts, "Finance import saved.", { closeModal: false });
     const totals = financeLedgerTotals(rows);
     importState.importing = false;
     importState.result = {
@@ -2786,7 +2803,7 @@ function download(name, content, type) {
 }
 
 function exportBackup() {
-  download("chapterops-alpha-omega-real-backup.json", JSON.stringify(state, null, 2), "application/json");
+  download("chapterops-alpha-omega-backup.json", JSON.stringify(state, null, 2), "application/json");
 }
 
 function undo() {
@@ -2797,11 +2814,11 @@ function undo() {
 }
 
 function clearWorkspace() {
-  if (!confirm("Clear the local workspace? This removes local records on this browser. Export a backup first if needed.")) return;
+  if (!confirm("Clear local data from this browser? Export a backup first if needed.")) return;
   snapshot("Workspace cleared", { type: "settings" });
   state = emptyWorkspace();
   oldStoreKeys.forEach((key) => localStorage.removeItem(key));
-  save(); render(); toast("Workspace cleared.");
+  save(); render(); toast("Local data cleared.");
 }
 
 function openModal(html) {

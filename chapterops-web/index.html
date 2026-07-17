@@ -17,20 +17,20 @@
           </div>
         </div>
         <nav class="nav" aria-label="Primary navigation">
-          <button class="nav-item active" data-view="dashboard">Executive Dashboard</button>
+          <button class="nav-item active" data-view="dashboard">Dashboard</button>
           <button class="nav-item" data-view="members">Members</button>
           <button class="nav-item" data-view="leadership">Executive Team</button>
-          <button class="nav-item" data-view="recruitment">Recruitment / PNMs</button>
+          <button class="nav-item" data-view="recruitment">Recruitment</button>
           <button class="nav-item" data-view="events">Attendance</button>
-          <button class="nav-item" data-view="finance">Finance / Dues</button>
+          <button class="nav-item" data-view="finance">Finance</button>
           <button class="nav-item" data-view="kpis">KPI Reports</button>
-          <button class="nav-item" data-view="tasks">Tasks / Follow-Ups</button>
+          <button class="nav-item" data-view="tasks">Tasks</button>
           <button class="nav-item" data-view="reports">Reports</button>
           <button class="nav-item" data-view="settings">Settings</button>
         </nav>
         <div class="sidebar-card">
-          <p class="eyebrow">Real chapter workspace</p>
-          <p>Sign in, finish setup, then enter or import Alpha Omega’s real roster, dues, events, and tasks.</p>
+          <p class="eyebrow">Alpha Omega Chapter</p>
+          <p>Kansas State University · Pi Kappa Alpha</p>
         </div>
       </aside>
 
@@ -38,17 +38,17 @@
         <header class="topbar">
           <div>
             <p class="eyebrow" id="orgLabel">Alpha Omega Chapter · Pi Kappa Alpha</p>
-            <h2 id="viewTitle">Executive Dashboard</h2>
+            <h2 id="viewTitle">Dashboard</h2>
           </div>
           <div class="topbar-actions">
-            <span class="cloud-status" id="cloudStatus">Sign in required for cloud data</span>
+            <span class="cloud-status" id="cloudStatus">Sign in required</span>
             <button class="ghost" id="undoBtn" title="Undo last change">Undo</button>
             <button class="ghost" id="signInBtn">Sign in</button>
             <button class="ghost hidden" id="syncBtn">Sync cloud</button>
             <button class="ghost hidden" id="signOutBtn">Sign out</button>
             <button class="ghost" id="importBtn">Import CSV/JSON</button>
             <button class="ghost" id="exportBtn">Backup</button>
-            <button class="primary" id="resetBtn">Clear workspace</button>
+            <button class="danger" id="resetBtn">Clear local data</button>
             <input hidden id="importFile" type="file" accept=".json,.csv,text/csv,application/json" />
           </div>
         </header>
