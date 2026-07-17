@@ -30,9 +30,20 @@ https://chapterops-lite.vercel.app/
 - Password reset is handled through Supabase Auth.
 - Supabase Auth and RLS protect the cloud workspace.
 - The browser app uses only a publishable Supabase key. Do not add a service-role key to frontend code.
-- Financial views are restricted in the UI to Admin, Treasurer, Assistant Treasurer, and President roles.
+- Role-based access is capability-based. Active Members do not load the full executive workspace.
+- Financial views are restricted to authorized finance roles.
 - Archive is preferred over permanent delete.
 - Delete actions require confirmation.
+
+## Testing multiple accounts safely
+
+Supabase stores the active browser session for this site in browser storage. To test an Admin account and an Active Member account at the same time, use separate browser storage contexts:
+
+- Admin account in Chrome Profile A and test account in Chrome Profile B.
+- Or Admin in a normal browser window and test account in an Incognito/Private window.
+- Or use two different browsers.
+
+Do not test two accounts in two tabs of the same browser profile. Signing into the second account can replace the first profile's stored session.
 
 ## Local development
 

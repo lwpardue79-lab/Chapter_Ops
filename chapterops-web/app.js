@@ -20,20 +20,49 @@ const viewNames = {
   kpis: "KPI Reports",
   tasks: "Tasks",
   reports: "Reports",
-  settings: "Settings"
+  settings: "Settings",
+  portal: "Member Portal"
 };
 
-const permissionRoles = ["Admin", "Treasurer", "Assistant Treasurer", "President", "Exec Board", "Committee Chair", "Active Member", "Read-only Advisor"];
+const permissionRoles = ["Admin", "President", "Treasurer", "Assistant Treasurer", "Secretary", "VPMD", "Recruitment", "Exec Board", "Committee Chair", "Active Member", "Read-only Advisor"];
 const roleRules = {
   Admin: ["all"],
-  Treasurer: ["view_all", "manage_finance", "view_finance", "manage_tasks"],
-  "Assistant Treasurer": ["view_all", "manage_finance", "view_finance", "manage_tasks"],
-  President: ["view_all", "view_finance", "manage_members", "manage_events", "manage_tasks", "view_reports"],
-  "Exec Board": ["view_all", "view_reports"],
-  "Committee Chair": ["view_basic", "manage_events", "manage_tasks"],
-  "Active Member": ["view_basic", "manage_own_tasks"],
-  "Read-only Advisor": ["view_reports"]
+  President: ["workspace.full.read", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.archive", "members.import", "members.export", "officers.view", "officers.manage", "recruitment.view", "recruitment.manage", "attendance.view", "attendance.manage", "finance.summary.view", "finance.member_balances.view", "reports.executive.view", "reports.finance.view", "reports.export", "kpi.view", "kpi.manage_all", "tasks.view_all", "tasks.manage", "settings.view", "backup.create"],
+  Treasurer: ["workspace.full.read", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.export", "officers.view", "attendance.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  "Assistant Treasurer": ["workspace.full.read", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.export", "officers.view", "attendance.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  Secretary: ["workspace.full.read", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.import", "members.export", "officers.view", "attendance.view", "attendance.manage", "reports.executive.view", "reports.export", "kpi.view", "kpi.manage_all", "tasks.view_all", "tasks.manage"],
+  VPMD: ["workspace.full.read", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.update", "members.export", "officers.view", "attendance.view", "attendance.manage", "reports.executive.view", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  Recruitment: ["workspace.full.read", "dashboard.executive.view", "members.list.view", "officers.view", "recruitment.view", "recruitment.manage", "attendance.view", "attendance.manage", "reports.executive.view", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  "Exec Board": ["workspace.full.read", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.export", "officers.view", "recruitment.view", "attendance.view", "reports.executive.view", "kpi.view", "kpi.submit_own", "tasks.view_all"],
+  "Committee Chair": ["workspace.full.read", "members.list.view", "officers.view", "attendance.view", "attendance.manage", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  "Active Member": ["member.portal.view", "members.self.view", "finance.self.view", "attendance.self.view", "tasks.view_own"],
+  "Read-only Advisor": ["workspace.full.read", "dashboard.executive.view", "members.list.view", "officers.view", "attendance.view", "reports.executive.view", "reports.finance.view", "kpi.view"]
 };
+const legacyPermissionMap = {
+  view_all: "members.list.view",
+  view_basic: "member.portal.view",
+  view_finance: "finance.member_balances.view",
+  view_reports: "reports.executive.view",
+  manage_members: "members.update",
+  manage_recruitment: "recruitment.manage",
+  manage_events: "attendance.manage",
+  manage_finance: "finance.manage",
+  manage_tasks: "tasks.manage",
+  manage_own_tasks: "tasks.view_own"
+};
+const navigationItems = [
+  { view: "dashboard", label: "Dashboard", permission: "dashboard.executive.view" },
+  { view: "members", label: "Members", permission: "members.list.view" },
+  { view: "leadership", label: "Executive Team", permission: "officers.view" },
+  { view: "recruitment", label: "Recruitment", permission: "recruitment.view" },
+  { view: "events", label: "Attendance", permission: "attendance.view" },
+  { view: "finance", label: "Finance", permission: "finance.member_balances.view" },
+  { view: "kpis", label: "KPI Reports", permission: "kpi.view" },
+  { view: "tasks", label: "Tasks", permission: "tasks.view_all" },
+  { view: "reports", label: "Reports", permission: "reports.executive.view" },
+  { view: "settings", label: "Settings", permission: "settings.view" }
+];
+const routePermissions = Object.fromEntries(navigationItems.map((item) => [item.view, item.permission]));
 
 const defaults = {
   officerRoles: ["President", "Internal Vice President", "External Vice President", "Treasurer", "Assistant Treasurer", "VPMD", "Recruitment", "Secretary", "Risk Management", "Health and Safety", "Scholarship", "New Member Education", "Sergeant at Arms", "Alumni Relations", "Social", "House Manager", "Philanthropy", "General member"],
@@ -54,15 +83,51 @@ let importState = { importing: false, result: null, error: "", rows: [], target:
 const pendingDeletes = new Set();
 let financeSort = { key: "lastName", dir: "asc" };
 
-const can = (permission) => roleRules[state.settings.currentRole]?.includes("all") || roleRules[state.settings.currentRole]?.includes(permission);
-const canManage = (area) => can("all") || can(`manage_${area}`);
+function resolvedRole() {
+  const role = cloud.profile?.approval_status === "approved" ? cloud.profile?.role : "";
+  return permissionRoles.includes(role) ? role : (role ? normalizeAppRole(role) : (cloud.client ? "Active Member" : state.settings.currentRole || "Admin"));
+}
+
+function normalizeAppRole(role = "") {
+  const key = normalizeTitle(role);
+  if (key.includes("admin")) return "Admin";
+  if (key.includes("assistant treasurer")) return "Assistant Treasurer";
+  if (key.includes("treasurer")) return "Treasurer";
+  if (key.includes("president")) return "President";
+  if (key.includes("secretary")) return "Secretary";
+  if (["vpmd", "brotherhood", "membership development", "vp membership development", "vice president of membership development"].some((v) => key.includes(v))) return "VPMD";
+  if (key.includes("recruitment") || key.includes("rush")) return "Recruitment";
+  if (key.includes("exec")) return "Exec Board";
+  if (key.includes("committee")) return "Committee Chair";
+  if (key.includes("advisor")) return "Read-only Advisor";
+  return "Active Member";
+}
+
+function permissionsForRole(role = resolvedRole()) {
+  const normalized = normalizeAppRole(role);
+  return new Set([...(roleRules[normalized] || roleRules["Active Member"] || [])]);
+}
+
+const can = (permission) => {
+  const resolved = legacyPermissionMap[permission] || permission;
+  const permissions = permissionsForRole();
+  return permissions.has("all") || permissions.has(resolved);
+};
+const canManage = (area) => can(`manage_${area}`);
+const canAny = (permissions = []) => permissions.some(can);
+const isFullWorkspaceAllowed = () => can("workspace.full.read") || can("all");
 
 function toDbRole(role = "") {
-  const key = String(role || "").toLowerCase();
+  const key = normalizeTitle(role);
   if (key.includes("admin")) return "admin";
   if (key.includes("president")) return "president";
+  if (key.includes("assistant treasurer")) return "assistant_treasurer";
   if (key.includes("treasurer")) return "treasurer";
   if (key.includes("secretary")) return "secretary";
+  if (key.includes("vpmd") || key.includes("brotherhood")) return "vpmd";
+  if (key.includes("recruitment") || key.includes("rush")) return "recruitment";
+  if (key.includes("exec")) return "executive";
+  if (key.includes("committee")) return "committee_chair";
   if (key.includes("advisor")) return "advisor";
   return "member";
 }
@@ -192,8 +257,11 @@ async function initCloud() {
   const { data } = await cloud.client.auth.getSession();
   cloud.user = data.session?.user || null;
   cloud.client.auth.onAuthStateChange(async (event, session) => {
+    const previousUserId = cloud.user?.id || "";
     cloud.user = session?.user || null;
     cloud.profile = null;
+    cloud.profiles = [];
+    if (!cloud.user || previousUserId !== cloud.user.id) resetSensitiveClientState();
     updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required");
     if (event === "PASSWORD_RECOVERY") openNewPasswordModal();
     if (cloud.user) await bootstrapUser();
@@ -206,8 +274,11 @@ async function initCloud() {
 function updateCloudUi(message) {
   document.getElementById("cloudStatus").textContent = message;
   document.getElementById("signInBtn").classList.toggle("hidden", !!cloud.user);
-  document.getElementById("syncBtn").classList.toggle("hidden", !cloud.user);
+  document.getElementById("syncBtn").classList.toggle("hidden", !cloud.user || !isFullWorkspaceAllowed());
   document.getElementById("signOutBtn").classList.toggle("hidden", !cloud.user);
+  document.getElementById("importBtn").classList.toggle("hidden", cloud.client && !canAny(["members.import", "finance.import", "backup.restore", "all"]));
+  document.getElementById("exportBtn").classList.toggle("hidden", cloud.client && !canAny(["backup.create", "reports.export", "members.export", "finance.export", "all"]));
+  document.getElementById("resetBtn").classList.toggle("hidden", cloud.client && !can("workspace.clear"));
 }
 
 async function signIn() {
@@ -261,8 +332,13 @@ async function updateAccountPassword(password, confirmPassword) {
 }
 
 async function signOut() {
-  if (cloud.client) await cloud.client.auth.signOut();
+  if (cloud.client) await cloud.client.auth.signOut({ scope: "local" });
   cloud.user = null;
+  cloud.profile = null;
+  cloud.profiles = [];
+  cloud.organizationId = "";
+  localStorage.removeItem(orgStoreKey);
+  resetSensitiveClientState();
   updateCloudUi("Signed out");
   render();
 }
@@ -270,10 +346,22 @@ async function signOut() {
 async function bootstrapUser() {
   await ensureOwnProfile();
   if (cloud.profile?.approval_status === "approved") {
-    state.settings.currentRole = cloud.profile.role || "Active Member";
-    await loadCloudWorkspace();
+    state.settings.currentRole = resolvedRole();
+    if (isFullWorkspaceAllowed()) await loadCloudWorkspace();
+    else resetSensitiveClientState(state.settings.currentRole);
     if (can("all")) await loadProfilesForAdmin();
   }
+}
+
+function resetSensitiveClientState(role = "Active Member") {
+  state = emptyWorkspace();
+  state.settings.currentRole = role;
+  activeFilters = {};
+  importState = { importing: false, result: null, error: "", rows: [], target: "", validation: null };
+  historyStack = [];
+  try {
+    localStorage.removeItem(storeKey);
+  } catch {}
 }
 
 async function ensureOwnProfile(input = {}) {
@@ -745,10 +833,13 @@ const collectionMeta = {
 };
 
 function render() {
+  refreshNavigation();
+  if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !routeAllowed(activeView)) activeView = defaultViewForRole();
   document.getElementById("viewTitle").textContent = viewNames[activeView];
   document.getElementById("orgLabel").textContent = `${state.settings.chapterName} · ${state.settings.schoolName}`;
   document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.view === activeView));
   document.getElementById("resetBtn").textContent = "Clear local data";
+  updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required");
   const root = document.getElementById("appRoot");
   if (cloud.client && !cloud.user) {
     root.innerHTML = renderLoginGate();
@@ -757,6 +848,18 @@ function render() {
   }
   if (cloud.client && cloud.user && cloud.profile?.approval_status !== "approved") {
     root.innerHTML = renderApprovalGate();
+    bindAuthActions(root);
+    return;
+  }
+  if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !isFullWorkspaceAllowed()) {
+    root.innerHTML = renderMemberPortal();
+    bindViewActions(root);
+    bindAuthActions(root);
+    return;
+  }
+  if (!routeAllowed(activeView)) {
+    root.innerHTML = renderRestrictedPage();
+    bindViewActions(root);
     bindAuthActions(root);
     return;
   }
@@ -774,6 +877,51 @@ function render() {
   }[activeView] || renderDashboard)();
   bindViewActions(root);
   bindAuthActions(root);
+}
+
+function refreshNavigation() {
+  const nav = document.querySelector(".nav");
+  if (!nav) return;
+  const items = navigationItems.filter((item) => !cloud.client || !cloud.user || can(item.permission));
+  nav.innerHTML = items.map((item) => `<button class="nav-item ${item.view === activeView ? "active" : ""}" data-view="${safe(item.view)}">${safe(item.label)}</button>`).join("");
+  nav.querySelectorAll(".nav-item").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+}
+
+function routeAllowed(view = activeView) {
+  const permission = routePermissions[view];
+  return !permission || can(permission);
+}
+
+function defaultViewForRole() {
+  return isFullWorkspaceAllowed() ? "dashboard" : "portal";
+}
+
+function renderRestrictedPage() {
+  return `<section class="auth-shell">
+    <div class="auth-card">
+      <p class="eyebrow">Access Restricted</p>
+      <h3>You do not have permission to view this section.</h3>
+      <p class="muted">Executive and administrative tools are available only to authorized chapter officers.</p>
+      <button class="primary" data-go="${safe(defaultViewForRole())}">Return to Home</button>
+    </div>
+  </section>`;
+}
+
+function renderMemberPortal() {
+  return `<section class="auth-shell member-portal">
+    <div class="auth-card">
+      <p class="eyebrow">Member Portal</p>
+      <h3>Your account is active.</h3>
+      <p class="muted">Executive and administrative tools are available only to authorized chapter officers.</p>
+      <div class="profile-grid">
+        <div><span>Email</span><strong>${safe(cloud.profile?.email || cloud.user?.email || "")}</strong></div>
+        <div><span>Role</span><strong>${safe(resolvedRole())}</strong></div>
+        <div><span>Status</span><strong>${safe(cloud.profile?.approval_status || "approved")}</strong></div>
+        <div><span>Chapter</span><strong>Alpha Omega</strong></div>
+      </div>
+      <p class="muted">Member-facing profile, balance, attendance, and task pages can be enabled after matching row-level policies are added for those limited fields.</p>
+    </div>
+  </section>`;
 }
 
 function renderPageHeader(title, subtitle = "", actions = []) {
@@ -917,17 +1065,19 @@ function listPanel(title, rows, view) {
 }
 
 function renderCollection(key) {
-  if (key === "finance" && !can("view_finance") && !can("all")) return restrictedPanel("Financial data is restricted to Admin, Treasurer, Assistant Treasurer, and President roles.");
+  if (key === "finance" && !can("finance.member_balances.view") && !can("all")) return restrictedPanel("Financial data is restricted to authorized finance roles.");
   if (key === "finance") return renderFinanceLedger();
   const meta = collectionMeta[key];
   const rows = filteredRows(key);
+  const importPermission = { members: "members.import", pnms: "recruitment.manage", events: "attendance.manage", tasks: "tasks.manage" }[key];
+  const exportPermission = { members: "members.export", pnms: "recruitment.view", events: "attendance.view", tasks: "reports.export" }[key];
   return `<section class="panel">
     <div class="panel-head page-panel-head">
       <div><h3>${safe(pageTitleForKey(key))}</h3><p class="muted">${safe(pageSubtitleForKey(key))}</p></div>
       <div class="button-row">
         <input class="search" id="searchInput" placeholder="Search ${meta.title.toLowerCase()}" value="${safe(activeFilters[key]?.q || "")}" />
-        <button class="ghost" data-import="${key}">Import CSV</button>
-        <button class="ghost" data-export="${key}">Export CSV</button>
+        ${can(importPermission) ? `<button class="ghost" data-import="${key}">Import CSV</button>` : ""}
+        ${can(exportPermission) ? `<button class="ghost" data-export="${key}">Export CSV</button>` : ""}
         ${actionAllowed(key) ? `<button class="primary" data-add="${key}">${meta.addLabel}</button>` : ""}
       </div>
     </div>
@@ -972,10 +1122,8 @@ function renderFinanceLedger() {
       <div><h3>Finance</h3><p class="muted">Member balances, charges, payments, and payment plans.</p></div>
       <div class="button-row">
         <input class="search" id="searchInput" placeholder="Search name, member ID, status, balances" value="${safe(filter.q || "")}" />
-        <button class="ghost" data-import="finance">Import Finance CSV</button>
-        <button class="ghost" data-export="finance-filtered">Export filtered</button>
-        <button class="ghost" data-export="finance-all">Export all</button>
-        <button class="ghost" data-finance-template>Template</button>
+        ${can("finance.import") ? `<button class="ghost" data-import="finance">Import Finance CSV</button>` : ""}
+        ${can("finance.export") ? `<button class="ghost" data-export="finance-filtered">Export filtered</button><button class="ghost" data-export="finance-all">Export all</button><button class="ghost" data-finance-template>Template</button>` : ""}
       </div>
     </div>
     ${renderFinanceTotals("Filtered totals", filteredTotals)}
@@ -1049,11 +1197,11 @@ function renderFinanceEmptyState() {
 }
 
 function actionAllowed(key) {
-  if (key === "pnms") return can("all") || can("manage_recruitment") || can("view_all");
-  if (key === "members") return can("all") || can("manage_members") || can("view_all");
-  if (key === "events") return can("all") || can("manage_events");
-  if (key === "finance") return can("all") || can("manage_finance");
-  if (key === "tasks") return can("all") || can("manage_tasks");
+  if (key === "pnms") return can("all") || can("recruitment.manage");
+  if (key === "members") return can("all") || can("members.create") || can("members.update");
+  if (key === "events") return can("all") || can("attendance.manage");
+  if (key === "finance") return can("all") || can("finance.manage");
+  if (key === "tasks") return can("all") || can("tasks.manage");
   return can("all");
 }
 
@@ -1262,7 +1410,7 @@ function activeExecutivePositions() {
 }
 
 function renderKpiReports() {
-  if (!can("view_all") && !can("view_reports") && !can("all")) return restrictedPanel("KPI Reports are restricted to approved Executive Team, President, Admin, Secretary, and advisor/reporting roles.");
+  if (!can("kpi.view") && !can("all")) return restrictedPanel("KPI Reports are restricted to authorized Executive Team, reporting, and advisor roles.");
   const meetings = [...(state.kpiMeetings || [])].filter((m) => m.status !== "Archived").sort((a, b) => String(b.meetingDate || b.meeting_date || "").localeCompare(String(a.meetingDate || a.meeting_date || "")));
   const selectedId = activeFilters.kpis?.meetingId || meetings[0]?.id || "";
   const meeting = meetings.find((m) => m.id === selectedId);
@@ -1368,12 +1516,12 @@ function renderKpiHistory(selectedId) {
 }
 
 function canManageKpis() {
-  return can("all") || ["Admin", "President", "Secretary", "Exec Board"].includes(state.settings.currentRole || cloud.profile?.role);
+  return can("all") || can("kpi.manage_all");
 }
 
 function canEditKpiReport(report) {
   if (canManageKpis()) return true;
-  if (["Treasurer", "Assistant Treasurer", "Exec Board", "Committee Chair"].includes(state.settings.currentRole || cloud.profile?.role)) return true;
+  if (can("kpi.submit_own")) return true;
   return (report.officerMemberIds || [report.officerMemberId]).includes(cloud.profile?.member_id || cloud.profile?.memberId || "");
 }
 
@@ -1616,10 +1764,11 @@ function reportBlock(title, lines) {
 }
 
 function renderSettings() {
+  if (!can("settings.view") && !can("settings.manage") && !can("all")) return restrictedPanel("Settings are restricted to chapter administrators.");
   const saveLabel = setupSave.saving ? "Saving…" : "Save setup";
   const fieldError = (key) => setupSave.fieldErrors?.[key] ? `<p class="field-error">${safe(setupSave.fieldErrors[key])}</p>` : "";
   return `<section class="panel">
-    <div class="panel-head"><div><p class="eyebrow">First-time setup</p><h3>Chapter configuration</h3></div><button class="primary" data-save-settings ${setupSave.saving ? "disabled" : ""}>${saveLabel}</button></div>
+    <div class="panel-head"><div><p class="eyebrow">First-time setup</p><h3>Chapter configuration</h3></div>${can("settings.manage") || can("chapter.setup") || can("all") ? `<button class="primary" data-save-settings ${setupSave.saving ? "disabled" : ""}>${saveLabel}</button>` : ""}</div>
     ${setupSave.error ? `<div class="notice error-notice"><h4>Setup could not be saved</h4><p>${safe(setupSave.error)}</p><button class="ghost" data-save-settings ${setupSave.saving ? "disabled" : ""}>Retry save</button></div>` : ""}
     ${setupSave.success ? `<div class="notice success-notice"><h4>Chapter setup saved successfully</h4><p>${safe(setupSave.success)}</p></div>` : ""}
     <div class="form-grid">
@@ -1682,7 +1831,7 @@ function listSetting(key, label) {
 }
 
 function restrictedPanel(message) {
-  return `<section class="panel empty-state"><h3>Restricted area</h3><p>${safe(message)}</p><button class="ghost" data-go="settings">Switch role in settings</button></section>`;
+  return `<section class="panel empty-state"><h3>Access Restricted</h3><p>${safe(message)}</p><button class="ghost" data-go="${safe(defaultViewForRole())}">Return to Home</button></section>`;
 }
 
 function emptySmall(text) {
@@ -1832,6 +1981,16 @@ function applyFilter(view, filter) {
 }
 
 function setView(view) {
+  if (view === "portal") {
+    activeView = defaultViewForRole();
+    render();
+    return;
+  }
+  if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !routeAllowed(view)) {
+    activeView = defaultViewForRole();
+    render();
+    return;
+  }
   activeView = view;
   render();
 }
@@ -1839,6 +1998,7 @@ function setView(view) {
 function openForm(key, id) {
   const meta = collectionMeta[key];
   if (!meta) return;
+  if (!actionAllowed(key)) return toast("You do not have permission to change these records.");
   const existing = state[key].find((r) => r.id === id);
   openModal(`<h3>${existing ? `Edit ${meta.title}` : meta.addLabel}</h3><form id="recordForm" class="form-grid">${meta.fields.map((f) => formField(f, existing)).join("")}<div class="wide button-row"><button class="primary" type="submit">Save</button><button class="ghost" type="button" data-close-modal>Cancel</button></div></form>`);
   document.getElementById("recordForm").addEventListener("submit", async (ev) => {
@@ -2238,6 +2398,7 @@ function validateSetupSettings(settings) {
 }
 
 async function saveSettingsForm() {
+  if (!can("settings.manage") && !can("chapter.setup") && !can("all")) return toast("Admin access required to save settings.");
   if (setupSave.saving) return;
   const nextSettings = collectSettingsFromForm();
   const fieldErrors = validateSetupSettings(nextSettings);
@@ -2339,12 +2500,15 @@ function isDuplicateLeadershipAssignment(row, existingId = "") {
 }
 
 function beginImport(target) {
+  const permission = target === "finance" ? "finance.import" : target === "members" ? "members.import" : target === "pnms" ? "recruitment.manage" : target === "events" ? "attendance.manage" : "backup.restore";
+  if (!can(permission) && !can("all")) return toast("You do not have permission to import this data.");
   document.getElementById("importFile").dataset.target = target;
   document.getElementById("importFile").click();
 }
 
 function importFile(file) {
   const target = document.getElementById("importFile").dataset.target || "members";
+  if (file.name.endsWith(".json") && !can("backup.restore") && !can("all")) return toast("Admin access required to restore backups.");
   const reader = new FileReader();
   reader.onload = () => {
     try {
@@ -2733,10 +2897,20 @@ function findMemberForImport(row) {
 }
 
 function exportCsv(key) {
+  if (!canExportKey(key)) return toast("You do not have permission to export this data.");
   const rows = exportRows(key);
   const headers = Object.keys(rows[0] || { empty: "" });
   const csv = [headers.join(","), ...rows.map((r) => headers.map((h) => `"${String(r[h] ?? "").replaceAll('"', '""')}"`).join(","))].join("\n");
   download(`${key}-export.csv`, csv, "text/csv");
+}
+
+function canExportKey(key) {
+  if (key.startsWith("finance") || key === "outstanding") return can("finance.export") || can("reports.finance.view") || can("all");
+  if (key === "members") return can("members.export") || can("all");
+  if (key === "kpis") return can("reports.export") || can("kpi.view") || can("all");
+  if (key === "reports") return can("reports.export") || can("all");
+  if (key === "attendance") return can("attendance.view") || can("reports.export") || can("all");
+  return can("reports.export") || can("all");
 }
 
 function exportRows(key) {
@@ -2803,6 +2977,7 @@ function download(name, content, type) {
 }
 
 function exportBackup() {
+  if (!can("backup.create") && !can("all")) return toast("Admin access required to create backups.");
   download("chapterops-alpha-omega-backup.json", JSON.stringify(state, null, 2), "application/json");
 }
 
@@ -2814,7 +2989,10 @@ function undo() {
 }
 
 function clearWorkspace() {
-  if (!confirm("Clear local data from this browser? Export a backup first if needed.")) return;
+  if (!can("workspace.clear") && !can("all")) return toast("Admin access required to clear the workspace.");
+  const phrase = "CLEAR LOCAL DATA";
+  const entered = prompt(`Type ${phrase} to clear local data from this browser.`);
+  if (entered !== phrase) return toast("Clear workspace cancelled.");
   snapshot("Workspace cleared", { type: "settings" });
   state = emptyWorkspace();
   oldStoreKeys.forEach((key) => localStorage.removeItem(key));
