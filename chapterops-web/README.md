@@ -21,6 +21,7 @@ https://chapterops-lite.vercel.app/
 - Officers and committees.
 - Reports for roster, dues, outstanding balances, payment history, attendance, event participation, officer tasks, and executive summary.
 - Activity log for important changes.
+- Active Member Portal with member-only Home, My Profile, My Balance, My Payments, My Attendance, My Tasks, Chapter Calendar, and Announcements.
 
 ## Privacy and security
 
@@ -31,6 +32,7 @@ https://chapterops-lite.vercel.app/
 - Supabase Auth and RLS protect the cloud workspace.
 - The browser app uses only a publishable Supabase key. Do not add a service-role key to frontend code.
 - Role-based access is capability-based. Active Members do not load the full executive workspace.
+- Active Member Portal data is loaded through member-scoped Supabase RPCs. A member account must be linked to a canonical roster member before portal data appears.
 - Financial views are restricted to authorized finance roles.
 - Archive is preferred over permanent delete.
 - Delete actions require confirmation.

@@ -2,6 +2,10 @@
   "buildCommand": "node scripts/build-sites.mjs",
   "outputDirectory": "dist",
   "cleanUrls": true,
+  "rewrites": [
+    { "source": "/member", "destination": "/index.html" },
+    { "source": "/member/:path*", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
