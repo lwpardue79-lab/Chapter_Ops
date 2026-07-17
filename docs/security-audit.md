@@ -149,6 +149,7 @@ Admin:
 Migration:
 
 - `supabase/migrations/202607171900_harden_rbac_rls.sql`
+- `supabase/migrations/202607171910_fix_normalize_db_role_search_path.sql`
 
 Tables with RLS enabled or confirmed:
 
@@ -225,17 +226,19 @@ The frontend now:
 1. Field-level member portal access is intentionally not enabled yet because the current source of truth is one JSON workspace row.
 2. To let Active Members view only their own profile, own balance, own attendance, or own tasks, move those records to normalized tables or expose carefully scoped RPC functions.
 3. Existing RPC functions should be refactored in a later migration to call `has_chapter_permission` so database and frontend capability names stay perfectly aligned.
-4. A full live Supabase policy audit requires running the migration in the production Supabase project and testing direct API calls as each role.
+4. Supabase security advisors still warn that several authenticated `SECURITY DEFINER` RPCs are executable. This is intentional for the current static frontend because those RPCs are the controlled write API and include internal user/chapter/role checks, but they should be moved to a private schema or replaced with normalized-table RLS in a future hardening pass.
+5. Direct API tests as real Active Member, Treasurer, VPMD, Recruitment, President, Admin, archived, and another-chapter accounts still require test credentials for those users.
 
 ## Manual Supabase actions required
 
-Run this SQL migration in Supabase:
+These migrations were applied to the production Supabase project during the 2026-07-17 hardening pass:
 
 ```text
 supabase/migrations/202607171900_harden_rbac_rls.sql
+supabase/migrations/202607171910_fix_normalize_db_role_search_path.sql
 ```
 
-After applying it, test with:
+After role-specific test accounts are available, test with:
 
 - Admin account
 - Active Member account
