@@ -104,6 +104,7 @@ const pendingDeletes = new Set();
 let financeSort = { key: "lastName", dir: "asc" };
 let activePortalTab = "home";
 let memberPortal = { loading: false, error: "", data: null, saving: false };
+let attendanceManager = { loading: false, error: "", data: null, selectedSessionId: "", search: "", filter: "all", saving: new Set(), saveStatus: "" };
 
 function resolvedRole() {
   const role = cloud.profile?.approval_status === "approved" ? cloud.profile?.role : "";
@@ -370,7 +371,10 @@ async function bootstrapUser() {
   await ensureOwnProfile();
   if (cloud.profile?.approval_status === "approved") {
     state.settings.currentRole = resolvedRole();
-    if (isFullWorkspaceAllowed()) await loadCloudWorkspace();
+    if (isFullWorkspaceAllowed()) {
+      await loadCloudWorkspace();
+      if (can("attendance.view")) await loadAttendanceManager();
+    }
     else {
       resetSensitiveClientState(state.settings.currentRole);
       await loadMemberPortal();
@@ -385,6 +389,7 @@ function resetSensitiveClientState(role = "Active Member") {
   activeFilters = {};
   importState = { importing: false, result: null, error: "", rows: [], target: "", validation: null };
   memberPortal = { loading: false, error: "", data: null, saving: false };
+  attendanceManager = { loading: false, error: "", data: null, selectedSessionId: "", search: "", filter: "all", saving: new Set(), saveStatus: "" };
   historyStack = [];
   try {
     localStorage.removeItem(storeKey);
@@ -402,6 +407,38 @@ async function loadMemberPortal() {
     logSupabaseError("member portal load failed", err);
     memberPortal = { loading: false, error: formatSupabaseError(err, "Member portal could not be loaded."), data: null, saving: false };
   }
+}
+
+async function loadAttendanceManager(sessionId = attendanceManager.selectedSessionId || null) {
+  if (!cloud.client || !cloud.user || !can("attendance.view")) return;
+  attendanceManager = { ...attendanceManager, loading: true, error: "" };
+  try {
+    const { data, error } = await cloud.client.rpc("get_attendance_manager_workspace", { p_session_id: sessionId || null });
+    if (error) throw error;
+    attendanceManager = {
+      ...attendanceManager,
+      loading: false,
+      error: "",
+      data: data || { roster: [], sessions: [], records: [], settings: {} },
+      selectedSessionId: data?.selectedSessionId || sessionId || "",
+      saveStatus: "Saved"
+    };
+  } catch (err) {
+    logSupabaseError("attendance manager load failed", err);
+    attendanceManager = { ...attendanceManager, loading: false, error: formatSupabaseError(err, "Attendance could not be loaded.") };
+  }
+}
+
+function setAttendancePayload(data, message = "Saved") {
+  attendanceManager = {
+    ...attendanceManager,
+    loading: false,
+    error: "",
+    data: data || attendanceManager.data,
+    selectedSessionId: data?.selectedSessionId || attendanceManager.selectedSessionId,
+    saveStatus: message,
+    saving: new Set()
+  };
 }
 
 async function ensureOwnProfile(input = {}) {
@@ -1156,6 +1193,9 @@ function renderHeaderAction(label, style = "ghost", target = "") {
   if (target.startsWith("export:")) return `<button class="${safe(style)}" data-export="${safe(target.split(":")[1])}">${safe(label)}</button>`;
   if (target === "print") return `<button class="${safe(style)}" data-print>${safe(label)}</button>`;
   if (target === "portal-refresh") return `<button class="${safe(style)}" data-refresh-member-portal>${safe(label)}</button>`;
+  if (target === "attendance-start") return `<button class="${safe(style)}" data-attendance-start>${safe(label)}</button>`;
+  if (target === "attendance-create") return `<button class="${safe(style)}" data-attendance-create>${safe(label)}</button>`;
+  if (target === "attendance-refresh") return `<button class="${safe(style)}" data-attendance-refresh>${safe(label)}</button>`;
   return `<button class="${safe(style)}" data-go="${safe(target)}">${safe(label)}</button>`;
 }
 
@@ -1284,6 +1324,7 @@ function listPanel(title, rows, view) {
 function renderCollection(key) {
   if (key === "finance" && !can("finance.member_balances.view") && !can("all")) return restrictedPanel("Financial data is restricted to authorized finance roles.");
   if (key === "finance") return renderFinanceLedger();
+  if (key === "events") return renderAttendanceManager();
   const meta = collectionMeta[key];
   const rows = filteredRows(key);
   const importPermission = { members: "members.import", pnms: "recruitment.manage", events: "attendance.manage", tasks: "tasks.manage" }[key];
@@ -1521,6 +1562,139 @@ function renderCheckinPanel() {
       <button class="primary" data-record-checkin>Record attendance</button>
     </div>
   </details>`;
+}
+
+function renderAttendanceManager() {
+  if (!can("attendance.view")) return restrictedPanel("Attendance is restricted to authorized chapter roles.");
+  if (!cloud.client) return renderLocalAttendanceFallback();
+  const data = attendanceManager.data || {};
+  const sessions = data.sessions || [];
+  const selectedSessionId = attendanceManager.selectedSessionId || data.selectedSessionId || sessions.find((s) => s.status === "Open")?.id || sessions[0]?.id || "";
+  const session = sessions.find((s) => String(s.id) === String(selectedSessionId)) || null;
+  const records = (data.records || []).filter((r) => !session || String(r.attendanceSessionId) === String(session.id));
+  const rosterRows = attendanceRosterRows(data.roster || [], records, session);
+  return `${renderPageHeader("Attendance", "Start chapter attendance, mark the roster, and review session history.", [
+    can("attendance.manage") ? ["Start Chapter Attendance", "primary", "attendance-start"] : ["Refresh", "ghost", "attendance-refresh"],
+    can("attendance.manage") ? ["Create Event Attendance", "ghost", "attendance-create"] : ["Refresh", "ghost", "attendance-refresh"],
+    ["Export CSV", "ghost", "export:attendance-checklist"]
+  ])}
+  ${attendanceManager.error ? `<section class="notice error-notice"><h4>Attendance unavailable</h4><p>${safe(attendanceManager.error)}</p><button class="ghost" data-attendance-refresh>Retry</button></section>` : ""}
+  ${attendanceManager.loading ? `<section class="panel empty-state"><h3>Loading attendance</h3><p>Getting the latest sessions and roster…</p></section>` : ""}
+  ${!attendanceManager.loading ? `<section class="panel attendance-actions">
+    <div class="panel-head page-panel-head">
+      <div><h3>Roster checklist</h3><p class="muted">${session ? `${safe(session.name)} · ${safe(session.eventType)} · ${safe(session.status)}` : "Start a session to load the live checklist."}</p></div>
+      <div class="button-row">
+        <button class="ghost" data-attendance-refresh>Refresh</button>
+        ${session ? `<select id="attendanceSessionSelect">${sessions.map((s) => `<option value="${safe(s.id)}" ${String(s.id) === String(session.id) ? "selected" : ""}>${safe(s.meetingDate)} · ${safe(s.name)} · ${safe(s.status)}</option>`).join("")}</select>` : ""}
+      </div>
+    </div>
+    ${session ? renderAttendanceSession(session, rosterRows) : renderAttendanceEmptyState()}
+  </section>
+  ${renderAttendanceHistory(sessions)}` : ""}`;
+}
+
+function renderLocalAttendanceFallback() {
+  const meta = collectionMeta.events;
+  const rows = filteredRows("events");
+  return `<section class="panel">
+    <div class="panel-head page-panel-head">
+      <div><h3>Attendance</h3><p class="muted">Sign in to use saved roster checklist attendance.</p></div>
+      <div class="button-row">${actionAllowed("events") ? `<button class="primary" data-add="events">${meta.addLabel}</button>` : ""}</div>
+    </div>
+    ${renderTable("events", rows)}
+  </section>`;
+}
+
+function attendanceRosterRows(roster, records, session) {
+  const recordMap = new Map(records.map((r) => [r.memberId, r]));
+  const q = String(attendanceManager.search || "").toLowerCase();
+  const filter = attendanceManager.filter || "all";
+  return roster.map((member) => {
+    const record = recordMap.get(member.id) || { memberId: member.id, status: "unmarked" };
+    return { member, record, session };
+  }).filter(({ member, record }) => {
+    const name = `${member.firstName || ""} ${member.lastName || ""}`.toLowerCase();
+    if (q && !name.includes(q) && !String(member.officerRole || "").toLowerCase().includes(q)) return false;
+    if (filter === "officers") return Boolean(member.officerRole);
+    if (filter === "new") return member.memberStatus === "New Member" || member.initiationStatus === "New Member";
+    if (filter !== "all") return record.status === filter;
+    return true;
+  });
+}
+
+function renderAttendanceEmptyState() {
+  return `<div class="empty-state"><h3>No attendance session open</h3><p>Start weekly chapter attendance or create attendance for another event.</p><div class="button-row centered">${can("attendance.manage") ? `<button class="primary" data-attendance-start>Start Chapter Attendance</button><button class="ghost" data-attendance-create>Create Event Attendance</button>` : ""}</div></div>`;
+}
+
+function renderAttendanceSession(session, rows) {
+  const totals = attendanceTotals(rows.map((r) => r.record));
+  const closed = session.status !== "Open";
+  const filters = [["all", "All"], ["unmarked", "Unmarked"], ["present", "Present"], ["late", "Late"], ["excused", "Excused"], ["absent", "Absent"], ["officers", "Officers"], ["new", "New members"]];
+  return `<div class="attendance-workspace">
+    <div class="attendance-summary">
+      ${mini("Expected", totals.expected, "events")}
+      ${mini("Present", totals.present, "events")}
+      ${mini("Late", totals.late, "events")}
+      ${mini("Excused", totals.excused, "events")}
+      ${mini("Absent", totals.absent, "events")}
+      ${mini("Unmarked", totals.unmarked, "events")}
+      ${mini("Attendance rate", `${totals.rate}%`, "events")}
+    </div>
+    <div class="status-strip attendance-toolbar">
+      <input class="search" id="attendanceSearch" placeholder="Search member roster" value="${safe(attendanceManager.search || "")}" />
+      ${filters.map(([value, label]) => `<button class="${attendanceManager.filter === value ? "active" : ""}" data-attendance-filter="${safe(value)}">${safe(label)}<strong>${value === "all" ? totals.expected : attendanceFilterCount(value, rows)}</strong></button>`).join("")}
+    </div>
+    <div class="button-row attendance-bulk">
+      ${can("attendance.manage") && !closed ? `<button class="ghost" data-attendance-bulk="present">Mark unmarked Present</button><button class="ghost" data-attendance-bulk="absent">Mark unmarked Absent</button><button class="ghost" data-attendance-bulk="unmarked">Clear all statuses</button><button class="primary" data-attendance-close="${safe(session.id)}">Close Attendance</button>` : ""}
+      ${closed ? `<span class="pill">Closed sessions require a correction reason.</span>` : ""}
+      <span class="cloud-status">${safe(attendanceManager.saveStatus || "Saved")}</span>
+    </div>
+    <div class="table-wrap attendance-table-wrap">
+      <table class="attendance-table"><thead><tr><th>Name</th><th>Member status</th><th>Officer role</th><th>Status</th><th>Check-in time</th><th>Notes</th><th>Actions</th></tr></thead><tbody>
+        ${rows.length ? rows.map(({ member, record }) => renderAttendanceRow(session, member, record)).join("") : `<tr><td colspan="7">No members match this filter.</td></tr>`}
+      </tbody></table>
+    </div>
+  </div>`;
+}
+
+function attendanceTotals(records) {
+  const totals = { expected: records.length, present: 0, late: 0, excused: 0, absent: 0, unmarked: 0 };
+  records.forEach((r) => { totals[r.status || "unmarked"] = (totals[r.status || "unmarked"] || 0) + 1; });
+  totals.rate = totals.expected ? Math.round(((totals.present + totals.late + totals.excused) / totals.expected) * 1000) / 10 : 0;
+  return totals;
+}
+
+function attendanceFilterCount(filter, rows) {
+  if (filter === "officers") return rows.filter(({ member }) => member.officerRole).length;
+  if (filter === "new") return rows.filter(({ member }) => member.memberStatus === "New Member" || member.initiationStatus === "New Member").length;
+  return rows.filter(({ record }) => record.status === filter).length;
+}
+
+function renderAttendanceRow(session, member, record) {
+  const statuses = ["present", "late", "excused", "absent"];
+  const status = record.status || "unmarked";
+  const saving = attendanceManager.saving?.has?.(member.id);
+  return `<tr data-attendance-member="${safe(member.id)}">
+    <td data-label="Name"><strong>${safe([member.lastName, member.firstName].filter(Boolean).join(", "))}</strong></td>
+    <td data-label="Member status">${safe(member.memberStatus || "Active")}</td>
+    <td data-label="Officer role">${safe(member.officerRole || "—")}</td>
+    <td data-label="Status"><span class="status-pill">${safe(labelize(status))}</span></td>
+    <td data-label="Check-in time">${safe(record.arrivalTime ? new Date(record.arrivalTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : record.markedAt ? new Date(record.markedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "—")}</td>
+    <td data-label="Notes"><input class="attendance-note" data-attendance-note="${safe(member.id)}" value="${safe(record.note || "")}" placeholder="Optional note" ${session.status !== "Open" ? "disabled" : ""} /></td>
+    <td data-label="Actions"><div class="row-actions attendance-buttons">
+      ${statuses.map((s) => `<button class="small ${status === s ? "primary" : "ghost"}" data-attendance-status="${safe(session.id)}:${safe(member.id)}:${safe(status === s ? "unmarked" : s)}" ${saving ? "disabled" : ""}>${saving ? "Saving…" : safe(labelize(s))}</button>`).join("")}
+    </div></td>
+  </tr>`;
+}
+
+function renderAttendanceHistory(sessions) {
+  if (!sessions.length) return "";
+  return `<section class="panel">
+    <div class="panel-head"><div><h3>Session history</h3><p class="muted">Review past and current attendance sessions.</p></div><button class="ghost" data-export="attendance-checklist">Export CSV</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Meeting/Event</th><th>Date</th><th>Type</th><th>Status</th><th>Present</th><th>Late</th><th>Excused</th><th>Absent</th><th>Rate</th><th>Actions</th></tr></thead><tbody>
+      ${sessions.map((s) => `<tr><td>${safe(s.name)}</td><td>${safe(s.meetingDate || "")}</td><td>${safe(s.eventType || "")}</td><td>${safe(s.status || "")}</td><td>${safe(s.presentCount || 0)}</td><td>${safe(s.lateCount || 0)}</td><td>${safe(s.excusedCount || 0)}</td><td>${safe(s.absentCount || 0)}</td><td>${safe(s.attendanceRate || 0)}%</td><td><button class="ghost small" data-attendance-session="${safe(s.id)}">Open report</button></td></tr>`).join("")}
+    </tbody></table></div>
+  </section>`;
 }
 
 function renderLeadership() {
@@ -1997,6 +2171,12 @@ function renderSettings() {
       ${settingInput("duesDueDates", "Dues due dates")}
       <label>Current role<input value="${safe(cloud.profile?.role || state.settings.currentRole)}" disabled /></label>
       <label>Attendance threshold<input id="set_attendanceThreshold" type="number" min="0" max="100" value="${safe(state.settings.attendanceThreshold)}" /></label>
+      <label>Default meeting name<input id="set_defaultMeetingName" value="${safe(state.settings.defaultMeetingName || "Chapter Meeting")}" /></label>
+      <label>Late threshold minutes<input id="set_lateThresholdMinutes" type="number" min="0" value="${safe(state.settings.lateThresholdMinutes || 10)}" /></label>
+      <label>Late counts as<select id="set_lateCountsAs"><option value="full" ${state.settings.lateCountsAs !== "partial" ? "selected" : ""}>Full attendance</option><option value="partial" ${state.settings.lateCountsAs === "partial" ? "selected" : ""}>Partial attendance</option></select></label>
+      <label>Excused handling<select id="set_excusedHandling"><option value="counts" ${state.settings.excusedHandling !== "excluded" ? "selected" : ""}>Counts as attended</option><option value="excluded" ${state.settings.excusedHandling === "excluded" ? "selected" : ""}>Exclude from denominator</option></select></label>
+      <label>Default attendance type<select id="set_defaultAttendanceEventType"><option>Chapter Meeting</option><option>Brotherhood Event</option><option>Recruitment Event</option><option>Social Event</option><option>Philanthropy Event</option><option>New Member Education</option><option>Executive Meeting</option><option>Other</option></select></label>
+      <label>Default required<select id="set_defaultAttendanceRequired"><option value="true" ${state.settings.defaultAttendanceRequired !== "false" ? "selected" : ""}>Required</option><option value="false" ${state.settings.defaultAttendanceRequired === "false" ? "selected" : ""}>Optional</option></select></label>
       ${listSetting("officerRoles", "Executive Team positions")}
       ${listSetting("executiveOfficerRoles", "Executive Team positions treated as executive")}
       ${listSetting("memberStatuses", "Member statuses")}
@@ -2066,6 +2246,20 @@ function bindViewActions(root) {
   root.querySelectorAll("[data-refresh-member-portal]").forEach((el) => el.addEventListener("click", async () => { await loadMemberPortal(); render(); }));
   root.querySelector("#memberProfileForm")?.addEventListener("submit", saveMyMemberProfile);
   root.querySelectorAll("[data-request-excuse]").forEach((el) => el.addEventListener("click", () => openExcuseRequestForm(el.dataset.requestExcuse, el.dataset.eventName || "Event")));
+  root.querySelectorAll("[data-attendance-refresh]").forEach((el) => el.addEventListener("click", async () => { await loadAttendanceManager(); render(); }));
+  root.querySelectorAll("[data-attendance-start]").forEach((el) => el.addEventListener("click", startChapterAttendance));
+  root.querySelectorAll("[data-attendance-create]").forEach((el) => el.addEventListener("click", openEventAttendanceForm));
+  root.querySelectorAll("[data-attendance-status]").forEach((el) => el.addEventListener("click", async () => {
+    const [sessionId, memberId, status] = el.dataset.attendanceStatus.split(":");
+    const note = root.querySelector(`[data-attendance-note="${memberId}"]`)?.value || "";
+    await setAttendanceStatus(sessionId, memberId, status, note);
+  }));
+  root.querySelectorAll("[data-attendance-bulk]").forEach((el) => el.addEventListener("click", () => bulkAttendanceStatus(el.dataset.attendanceBulk)));
+  root.querySelectorAll("[data-attendance-close]").forEach((el) => el.addEventListener("click", () => closeAttendanceSession(el.dataset.attendanceClose)));
+  root.querySelectorAll("[data-attendance-filter]").forEach((el) => el.addEventListener("click", () => { attendanceManager.filter = el.dataset.attendanceFilter; render(); }));
+  root.querySelectorAll("[data-attendance-session]").forEach((el) => el.addEventListener("click", async () => { attendanceManager.selectedSessionId = el.dataset.attendanceSession; await loadAttendanceManager(el.dataset.attendanceSession); render(); }));
+  root.querySelector("#attendanceSessionSelect")?.addEventListener("change", async (ev) => { attendanceManager.selectedSessionId = ev.target.value; await loadAttendanceManager(ev.target.value); render(); });
+  root.querySelector("#attendanceSearch")?.addEventListener("input", (ev) => { attendanceManager.search = ev.target.value; render(); });
   root.querySelectorAll("[data-my-task-status]").forEach((el) => el.addEventListener("click", async () => {
     const [taskId, status] = el.dataset.myTaskStatus.split(":");
     await updateMyTaskStatus(taskId, status);
@@ -2115,6 +2309,155 @@ function bindViewActions(root) {
   if (checkType) checkType.addEventListener("change", refreshCheckPerson);
   const record = root.querySelector("[data-record-checkin]");
   if (record) record.addEventListener("click", recordCheckin);
+}
+
+async function startChapterAttendance() {
+  if (!cloud.client || !can("attendance.manage")) return toast("Secretary or Admin attendance access required.");
+  if (!confirm("Start chapter attendance now? The active roster will load as Unmarked.")) return;
+  attendanceManager.saveStatus = "Saving…";
+  render();
+  try {
+    const { data, error } = await cloud.client.rpc("start_chapter_attendance");
+    if (error) throw error;
+    setAttendancePayload(data, "Saved");
+    render();
+    toast("Chapter attendance started.");
+  } catch (err) {
+    logSupabaseError("start chapter attendance failed", err);
+    attendanceManager = { ...attendanceManager, error: formatSupabaseError(err, "Could not start attendance."), saveStatus: "Save failed — Retry" };
+    render();
+  }
+}
+
+function openEventAttendanceForm() {
+  if (!can("attendance.manage")) return toast("Secretary or Admin attendance access required.");
+  const types = ["Brotherhood Event", "Recruitment Event", "Social Event", "Philanthropy Event", "New Member Education", "Executive Meeting", "Other"];
+  openModal(`<h3>Create Event Attendance</h3>
+    <form id="eventAttendanceForm" class="form-grid">
+      <label class="wide">Session name<input name="name" required placeholder="Example: Brotherhood Dinner" /></label>
+      <label>Event type<select name="eventType">${types.map((t) => `<option>${safe(t)}</option>`).join("")}</select></label>
+      <label>Date<input name="meetingDate" type="date" value="${todayIso()}" /></label>
+      <label>Start time<input name="startTime" type="time" /></label>
+      <label>Required<select name="required"><option value="true">Required</option><option value="false">Optional</option></select></label>
+      <div class="wide button-row"><button class="primary" type="submit">Create Attendance</button><button class="ghost" type="button" data-close-modal>Cancel</button></div>
+    </form>`);
+  document.getElementById("eventAttendanceForm")?.addEventListener("submit", createEventAttendanceSession);
+}
+
+async function createEventAttendanceSession(ev) {
+  ev.preventDefault();
+  const form = Object.fromEntries(new FormData(ev.currentTarget).entries());
+  const startsAt = form.startTime ? new Date(`${form.meetingDate || todayIso()}T${form.startTime}`).toISOString() : new Date().toISOString();
+  attendanceManager.saveStatus = "Saving…";
+  render();
+  try {
+    const { data, error } = await cloud.client.rpc("create_event_attendance_session", {
+      p_name: form.name,
+      p_event_type: form.eventType || "Other",
+      p_meeting_date: form.meetingDate || todayIso(),
+      p_starts_at: startsAt,
+      p_required: form.required === "true",
+      p_event_id: null
+    });
+    if (error) throw error;
+    closeModal();
+    setAttendancePayload(data, "Saved");
+    render();
+    toast("Event attendance created.");
+  } catch (err) {
+    logSupabaseError("create event attendance failed", err);
+    attendanceManager = { ...attendanceManager, error: formatSupabaseError(err, "Could not create attendance."), saveStatus: "Save failed — Retry" };
+    render();
+  }
+}
+
+async function setAttendanceStatus(sessionId, memberId, status, note = "") {
+  if (!cloud.client || !can("attendance.manage")) return toast("Secretary or Admin attendance access required.");
+  const session = (attendanceManager.data?.sessions || []).find((s) => String(s.id) === String(sessionId));
+  let reason = "";
+  if (session?.status === "Closed") {
+    reason = prompt("Correction reason required for closed attendance:");
+    if (!reason) return toast("Correction cancelled.");
+  }
+  const saving = new Set(attendanceManager.saving || []);
+  saving.add(memberId);
+  attendanceManager = { ...attendanceManager, saving, saveStatus: "Saving…" };
+  render();
+  try {
+    const { data, error } = await cloud.client.rpc("set_attendance_status", {
+      p_session_id: sessionId,
+      p_target_member_id: memberId,
+      p_new_status: status,
+      p_note: note || null,
+      p_adjustment_reason: reason || null
+    });
+    if (error) throw error;
+    setAttendancePayload(data, "Saved");
+    render();
+  } catch (err) {
+    logSupabaseError("attendance status save failed", err);
+    saving.delete(memberId);
+    attendanceManager = { ...attendanceManager, saving, saveStatus: "Save failed — Retry", error: formatSupabaseError(err, "Attendance change could not be saved.") };
+    render();
+  }
+}
+
+async function bulkAttendanceStatus(status) {
+  if (!cloud.client || !can("attendance.manage")) return toast("Secretary or Admin attendance access required.");
+  const sessionId = attendanceManager.selectedSessionId || attendanceManager.data?.selectedSessionId;
+  if (!sessionId) return toast("Open an attendance session first.");
+  const onlyUnmarked = status !== "unmarked";
+  const message = status === "absent"
+    ? "Mark all remaining unmarked members Absent?"
+    : status === "unmarked"
+      ? "Clear all statuses for this open session?"
+      : `Mark all remaining unmarked members ${labelize(status)}?`;
+  if (!confirm(message)) return;
+  attendanceManager.saveStatus = "Saving…";
+  render();
+  try {
+    const { data, error } = await cloud.client.rpc("bulk_set_attendance_status", {
+      p_session_id: sessionId,
+      p_new_status: status,
+      p_only_unmarked: onlyUnmarked
+    });
+    if (error) throw error;
+    setAttendancePayload(data, "Saved");
+    render();
+    toast("Bulk attendance update saved.");
+  } catch (err) {
+    logSupabaseError("attendance bulk save failed", err);
+    attendanceManager = { ...attendanceManager, saveStatus: "Save failed — Retry", error: formatSupabaseError(err, "Bulk attendance update failed.") };
+    render();
+  }
+}
+
+async function closeAttendanceSession(sessionId) {
+  if (!cloud.client || !can("attendance.manage")) return toast("Secretary or Admin attendance access required.");
+  const session = (attendanceManager.data?.sessions || []).find((s) => String(s.id) === String(sessionId));
+  const unmarked = Number(session?.unmarkedCount || 0);
+  const markAbsent = unmarked > 0
+    ? confirm(`${unmarked} members are still unmarked. Mark all remaining unmarked members Absent and close?`)
+    : confirm("Close attendance now?");
+  if (!markAbsent && unmarked > 0) return toast("Close cancelled.");
+  if (!markAbsent) return;
+  attendanceManager.saveStatus = "Saving…";
+  render();
+  try {
+    const { data, error } = await cloud.client.rpc("close_attendance_session", {
+      p_session_id: sessionId,
+      p_mark_unmarked_absent: unmarked > 0
+    });
+    if (error) throw error;
+    setAttendancePayload(data, "Saved");
+    render();
+    const closed = data?.sessions?.find((s) => String(s.id) === String(sessionId));
+    toast(`Attendance complete: ${closed?.attendanceRate ?? 0}% attendance.`);
+  } catch (err) {
+    logSupabaseError("attendance close failed", err);
+    attendanceManager = { ...attendanceManager, saveStatus: "Save failed — Retry", error: formatSupabaseError(err, "Attendance could not be closed.") };
+    render();
+  }
 }
 
 async function saveMyMemberProfile(ev) {
@@ -2679,7 +3022,7 @@ function recalcMemberDues() {
 
 function collectSettingsFromForm() {
   const next = { ...state.settings };
-  ["chapterName", "schoolName", "term", "academicYear", "defaultDuesAmount", "duesDueDates", "attendanceThreshold", "privacyNotice"].forEach((k) => {
+  ["chapterName", "schoolName", "term", "academicYear", "defaultDuesAmount", "duesDueDates", "attendanceThreshold", "defaultMeetingName", "lateThresholdMinutes", "lateCountsAs", "excusedHandling", "defaultAttendanceEventType", "defaultAttendanceRequired", "privacyNotice"].forEach((k) => {
     const el = document.getElementById(`set_${k}`);
     if (el) next[k] = el.value;
   });
@@ -3211,6 +3554,7 @@ function exportCsv(key) {
 
 function canExportKey(key) {
   if (key.startsWith("finance") || key === "outstanding") return can("finance.export") || can("reports.finance.view") || can("all");
+  if (key === "attendance-checklist") return can("attendance.view") || can("reports.export") || can("all");
   if (key === "members") return can("members.export") || can("all");
   if (key === "kpis") return can("reports.export") || can("kpi.view") || can("all");
   if (key === "reports") return can("reports.export") || can("all");
@@ -3264,6 +3608,29 @@ function exportRows(key) {
     return [{ report: "Member count", value: metrics().members }, { report: "Executive Team members", value: officerDirectory.executiveOfficers.length }, { report: "Total dues billed", value: metrics().totalBilled }, { report: "Total collected", value: metrics().totalCollected }, { report: "Outstanding", value: metrics().outstanding }, { report: "Open tasks", value: metrics().tasks }];
   }
   if (key === "attendance") return state.attendance;
+  if (key === "attendance-checklist") {
+    const data = attendanceManager.data || {};
+    const roster = new Map((data.roster || []).map((m) => [m.id, m]));
+    const sessions = new Map((data.sessions || []).map((s) => [String(s.id), s]));
+    return (data.records || []).map((r) => {
+      const member = roster.get(r.memberId) || {};
+      const session = sessions.get(String(r.attendanceSessionId)) || {};
+      return {
+        session: session.name || "",
+        date: session.meetingDate || "",
+        eventType: session.eventType || "",
+        memberId: r.memberId,
+        lastName: member.lastName || "",
+        firstName: member.firstName || "",
+        memberStatus: member.memberStatus || "",
+        officerRole: member.officerRole || "",
+        attendanceStatus: r.status || "unmarked",
+        markedAt: r.markedAt || "",
+        arrivalTime: r.arrivalTime || "",
+        note: r.note || ""
+      };
+    });
+  }
   return (state[key] || filteredRows(key)).map((r) => ({ ...r, memberName: r.memberId ? memberName(r.memberId) : "" }));
 }
 

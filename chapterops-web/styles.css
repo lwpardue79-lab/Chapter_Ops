@@ -168,6 +168,53 @@ label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; font-weig
 .status-strip button.active { background: var(--soft); border-color: #bfdbfe; color: var(--brand-2); }
 .checkin { border: 1px solid var(--line); border-radius: 18px; padding: 14px; margin-bottom: 16px; background: #f8fbff; }
 .checkin summary { font-weight: 900; cursor: pointer; margin-bottom: 12px; }
+.attendance-actions { display: grid; gap: 16px; }
+.attendance-workspace { display: grid; gap: 14px; }
+.attendance-summary {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 10px;
+  padding: 10px;
+  margin: -4px -4px 2px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(15, 37, 58, 0.08);
+  backdrop-filter: blur(12px);
+}
+.attendance-toolbar {
+  align-items: center;
+  margin-bottom: 0;
+}
+.attendance-toolbar .search { flex: 1 1 240px; }
+.attendance-bulk {
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #f8fbff;
+}
+.attendance-table-wrap {
+  max-height: 68vh;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+.attendance-table { min-width: 980px; }
+.attendance-buttons { min-width: 330px; }
+.attendance-buttons .small {
+  min-height: 36px;
+  min-width: 74px;
+}
+.attendance-note {
+  min-width: 180px;
+  padding: 8px 10px;
+}
+.attendance-table tr[data-attendance-member] td:first-child strong {
+  color: var(--ink);
+}
 
 .empty-state {
   padding: 28px; text-align: center; border: 1px dashed #b8c7d8; border-radius: 18px; background: #f8fbff;
@@ -258,6 +305,13 @@ button:disabled {
   .panel { padding: 15px; border-radius: 20px; }
   .kpi-card, .mini-card, .action-tile { padding: 15px; border-radius: 17px; }
   .kpi-grid, .mini-grid { grid-template-columns: 1fr; }
+  .attendance-summary { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .attendance-bulk > * { flex: 1 1 100%; }
+  .attendance-table-wrap { max-height: none; border: 0; }
+  .attendance-table { min-width: 0; }
+  .attendance-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; width: 100%; }
+  .attendance-buttons .small { width: 100%; min-height: 44px; }
+  .attendance-note { min-width: 0; }
   table, thead, tbody, tr, th, td { display: block; min-width: 0; }
   thead { display: none; }
   .finance-table-wrap { max-height: none; border: 0; }
