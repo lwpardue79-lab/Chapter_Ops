@@ -343,6 +343,7 @@ async function initCloud() {
 
 function updateCloudUi(message) {
   document.getElementById("cloudStatus").textContent = message;
+  document.getElementById("globalSearchBtn").classList.toggle("hidden", !cloud.user || cloud.profile?.approval_status !== "approved");
   document.getElementById("signInBtn").classList.toggle("hidden", !!cloud.user);
   document.getElementById("syncBtn").classList.toggle("hidden", !cloud.user || !isFullWorkspaceAllowed());
   document.getElementById("signOutBtn").classList.toggle("hidden", !cloud.user);
@@ -4214,6 +4215,168 @@ function openProfile(key, id) {
   document.querySelector("#modal [data-record-payment]")?.addEventListener("click", (ev) => { closeModal(); openPaymentForm(ev.currentTarget.dataset.recordPayment); });
 }
 
+function searchable(value = "") {
+  return String(value || "").toLowerCase();
+}
+
+function searchMatch(query, values = []) {
+  if (!query) return true;
+  return values.some((value) => searchable(value).includes(query));
+}
+
+function addSearchResult(results, query, item) {
+  if (!query || searchMatch(query, item.search || [item.title, item.subtitle, item.type])) results.push(item);
+}
+
+function buildGlobalSearchResults(rawQuery = "") {
+  const query = searchable(rawQuery).trim();
+  if (!query) return [];
+  const results = [];
+  const canSeePrivateMemberFields = can("members.private_contact.view") || can("all");
+
+  if (routeAllowed("members")) {
+    activeMembers().forEach((member) => addSearchResult(results, query, {
+      type: "Member",
+      title: memberName(member.id),
+      subtitle: [memberIdentifier(member), member.memberStatus, member.officerRole, member.committee].filter(Boolean).join(" · "),
+      action: `profile:members:${member.id}`,
+      search: [memberName(member.id), memberIdentifier(member), member.memberStatus, member.initiationStatus, member.officerRole, member.committee, member.major, member.tags, canSeePrivateMemberFields ? member.email : "", canSeePrivateMemberFields ? member.phone : ""]
+    }));
+  }
+
+  if (routeAllowed("recruitment")) {
+    activePnms().forEach((pnm) => addSearchResult(results, query, {
+      type: "Recruitment",
+      title: pnmName(pnm.id),
+      subtitle: [pnm.status, pnm.referralSource, pnm.assignedRecruiter || pnm.assignedBrother].filter(Boolean).join(" · "),
+      action: `profile:pnms:${pnm.id}`,
+      search: [pnmName(pnm.id), pnm.status, pnm.referralSource, pnm.assignedRecruiter, pnm.assignedBrother, pnm.hometown, pnm.major, pnm.tags, pnm.notes]
+    }));
+  }
+
+  if (routeAllowed("brotherhood")) {
+    brotherhood.events.filter((event) => event.status !== "Archived").forEach((event) => addSearchResult(results, query, {
+      type: "Brotherhood Event",
+      title: event.title,
+      subtitle: [formatDateTime(event.startsAt), event.category, event.location, event.status].filter(Boolean).join(" · "),
+      action: `brotherhood:${event.id}`,
+      search: [event.title, event.description, event.category, event.location, event.status, memberName(event.assignedOfficerMemberId), memberName(event.organizerMemberId)]
+    }));
+  }
+
+  if (routeAllowed("events")) {
+    state.events.filter((event) => !event.archived).forEach((event) => addSearchResult(results, query, {
+      type: "Attendance Event",
+      title: event.name || event.eventName || "Event",
+      subtitle: [event.date, event.type || event.eventType, event.location].filter(Boolean).join(" · "),
+      action: `view:events`,
+      search: [event.name, event.eventName, event.type, event.eventType, event.location, event.notes]
+    }));
+  }
+
+  if (routeAllowed("finance")) {
+    financeLedgerRows("all").forEach((row) => addSearchResult(results, query, {
+      type: "Finance",
+      title: `${row.firstName} ${row.lastName}`,
+      subtitle: `${row.memberIdentifier || "Member"} · ${moneyFromCents(row.totalBalanceCents)} total balance · ${row.paymentPlanStatus || "None"}`,
+      action: `finance:${row.memberId}`,
+      search: [row.firstName, row.lastName, row.memberIdentifier, row.status, row.memberType, row.paymentPlanStatus, String(row.totalBalanceCents / 100)]
+    }));
+  }
+
+  if (routeAllowed("tasks")) {
+    openTasks().forEach((task) => addSearchResult(results, query, {
+      type: "Task",
+      title: task.title || "Task",
+      subtitle: [task.status, task.priority, task.dueDate, memberName(task.assignedMemberId) || task.assignedPerson].filter(Boolean).join(" · "),
+      action: `view:tasks`,
+      search: [task.title, task.description, task.status, task.priority, task.category, task.assignedPerson, memberName(task.assignedMemberId), task.notes]
+    }));
+  }
+
+  if (routeAllowed("handoffs")) {
+    handoffs.records.forEach((record) => addSearchResult(results, query, {
+      type: "Officer Handoff",
+      title: displayPosition(record.positionTitle),
+      subtitle: [record.status, memberName(record.outgoingMemberId), memberName(record.incomingMemberId), record.termLabel].filter(Boolean).join(" · "),
+      action: `view:handoffs`,
+      search: [record.positionTitle, displayPosition(record.positionTitle), record.status, record.termLabel, record.responsibilities, record.recurringDuties, record.currentProjects, record.openTasks, record.keyContacts, record.procedures, record.lessonsLearned, record.recommendations, record.privateTransitionNotes]
+    }));
+  }
+
+  if (routeAllowed("kpis")) {
+    state.kpiMeetings.forEach((meeting) => addSearchResult(results, query, {
+      type: "KPI Meeting",
+      title: meeting.title || "KPI Meeting",
+      subtitle: [meeting.status, meeting.meetingDate, meeting.reportingPeriodStart, meeting.reportingPeriodEnd].filter(Boolean).join(" · "),
+      action: `view:kpis`,
+      search: [meeting.title, meeting.status, meeting.meetingDate, meeting.reportingPeriodStart, meeting.reportingPeriodEnd]
+    }));
+    state.kpiPositionReports.forEach((report) => addSearchResult(results, query, {
+      type: "KPI Report",
+      title: displayPosition(report.position),
+      subtitle: [report.status, (report.officerMemberIds || [report.officerMemberId]).filter(Boolean).map(memberName).join(", ")].filter(Boolean).join(" · "),
+      action: `view:kpis`,
+      search: [displayPosition(report.position), report.status, report.overallUpdate, report.mainAccomplishment, report.biggestBlocker, report.nextPriority]
+    }));
+  }
+
+  if (routeAllowed("reports")) {
+    ["Reports & Analytics", "President Packet", "Treasurer Packet", "VPMD Packet", "Recruitment Packet", "Secretary Packet"].forEach((title) => addSearchResult(results, query, {
+      type: "Report",
+      title,
+      subtitle: "Open reports and export packets",
+      action: "view:reports",
+      search: [title, "reports analytics packets exports"]
+    }));
+  }
+
+  return results.slice(0, 50);
+}
+
+function renderGlobalSearchResults(query = "") {
+  const results = buildGlobalSearchResults(query);
+  if (!query.trim()) return `<div class="empty-state"><h3>Search AO Command</h3><p>Find authorized members, events, tasks, reports, handoffs, and finance records.</p></div>`;
+  if (!results.length) return `<div class="empty-state"><h3>No results found</h3><p>Try a name, officer role, event, task, report, or member ID.</p></div>`;
+  return `<div class="search-results">${results.map((item) => `<button class="search-result" data-search-action="${safe(item.action)}"><span><strong>${safe(item.title || "Untitled")}</strong><span>${safe(item.subtitle || "")}</span></span><em>${safe(item.type)}</em></button>`).join("")}</div>`;
+}
+
+function openGlobalSearch() {
+  if (!cloud.user || cloud.profile?.approval_status !== "approved") return toast("Sign in to search AO Command.");
+  openModal(`<div class="search-modal">
+    <h3>Search AO Command</h3>
+    <p class="keyboard-hint">Search respects your role permissions. Shortcut: ${navigator.platform?.toLowerCase().includes("mac") ? "⌘" : "Ctrl"} K</p>
+    <input id="globalSearchInput" class="global-search-input" autocomplete="off" placeholder="Search members, events, tasks, reports…" />
+    <div id="globalSearchResults">${renderGlobalSearchResults("")}</div>
+  </div>`);
+  const input = document.getElementById("globalSearchInput");
+  const refresh = () => {
+    document.getElementById("globalSearchResults").innerHTML = renderGlobalSearchResults(input.value);
+    bindGlobalSearchResultActions();
+  };
+  input.addEventListener("input", refresh);
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      const first = document.querySelector("#globalSearchResults [data-search-action]");
+      if (first) executeGlobalSearchAction(first.dataset.searchAction);
+    }
+  });
+  setTimeout(() => input.focus(), 0);
+}
+
+function bindGlobalSearchResultActions() {
+  document.querySelectorAll("#globalSearchResults [data-search-action]").forEach((el) => el.addEventListener("click", () => executeGlobalSearchAction(el.dataset.searchAction)));
+}
+
+function executeGlobalSearchAction(action = "") {
+  const [kind, key, id] = action.split(":");
+  closeModal();
+  if (kind === "profile") return openProfile(key, id);
+  if (kind === "brotherhood") return openBrotherhoodEventDetails(key);
+  if (kind === "finance") return openFinanceAccountForm(key);
+  if (kind === "view") return setView(key);
+}
+
 function profileEntriesFor(key, row) {
   if (key !== "members" || can("members.private_contact.view") || can("all")) return Object.entries(row);
   const allowed = new Set(["firstName", "lastName", "preferredName", "schoolYear", "graduationYear", "memberStatus", "initiationStatus", "officerRole", "committee", "major", "tags"]);
@@ -5426,6 +5589,13 @@ window.addEventListener("popstate", () => {
 });
 document.querySelectorAll(".nav-item").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 document.getElementById("signInBtn").addEventListener("click", signIn);
+document.getElementById("globalSearchBtn").addEventListener("click", openGlobalSearch);
+document.addEventListener("keydown", (ev) => {
+  const isSearchShortcut = (ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k";
+  if (!isSearchShortcut || ev.target?.closest?.("input, textarea, select")) return;
+  ev.preventDefault();
+  openGlobalSearch();
+});
 document.getElementById("signOutBtn").addEventListener("click", signOut);
 document.getElementById("syncBtn").addEventListener("click", () => syncCloudWorkspace(true));
 document.getElementById("undoBtn").addEventListener("click", undo);
