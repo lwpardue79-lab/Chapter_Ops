@@ -162,6 +162,27 @@ function toDbRole(role = "") {
   return "member";
 }
 
+function fromDbRole(role = "") {
+  const key = String(role || "").toLowerCase().replace(/[_-]+/g, " ").trim();
+  if (!key) return "";
+  if (key === "admin" || key.includes("admin")) return "Admin";
+  if (key === "assistant treasurer" || key.includes("assistant treasurer")) return "Assistant Treasurer";
+  if (key === "treasurer" || key.includes("treasurer")) return "Treasurer";
+  if (key === "president" || key.includes("president")) return "President";
+  if (key === "secretary" || key.includes("secretary")) return "Secretary";
+  if (["vpmd", "brotherhood", "membership development"].some((v) => key.includes(v))) return "VPMD";
+  if (key.includes("recruitment") || key.includes("rush")) return "Recruitment";
+  if (key === "executive" || key.includes("exec")) return "Exec Board";
+  if (key === "committee chair" || key.includes("committee")) return "Committee Chair";
+  if (key === "advisor" || key.includes("advisor")) return "Read-only Advisor";
+  if (key === "member" || key.includes("active member")) return "Active Member";
+  return normalizeAppRole(role);
+}
+
+function displayRoleForProfile(profile = {}, membership = {}) {
+  return fromDbRole(profile.role) || fromDbRole(membership.role) || fromDbRole(profile.requested_role) || "Active Member";
+}
+
 function formatSupabaseError(err, fallback = "Request failed.") {
   if (!err) return fallback;
   const parts = [err.message, err.details, err.hint, err.code].filter(Boolean);
@@ -485,8 +506,18 @@ async function ensureOwnProfile(input = {}) {
 async function loadProfilesForAdmin() {
   if (!cloud.client || !can("all")) return;
   const { data, error } = await cloud.client.from("profiles").select("*").order("created_at", { ascending: false });
-  if (!error) cloud.profiles = data || [];
-  const { data: memberships } = await cloud.client.from("organization_members").select("id, organization_id, user_id, email, role, member_id, status");
+  if (error) {
+    logSupabaseError("load admin profiles failed", error);
+    toast(formatSupabaseError(error, "Could not load user profiles."));
+    return;
+  }
+  cloud.profiles = data || [];
+  const { data: memberships, error: membershipError } = await cloud.client.from("organization_members").select("id, organization_id, user_id, email, role, member_id, status");
+  if (membershipError) {
+    logSupabaseError("load admin memberships failed", membershipError);
+    toast(formatSupabaseError(membershipError, "Could not load chapter memberships."));
+    return;
+  }
   cloud.memberships = memberships || [];
 }
 
@@ -2486,7 +2517,7 @@ function renderTrustOperationsPanel() {
 
 function renderAdminUserManagement() {
   const rows = cloud.profiles || [];
-  const membershipFor = (userId) => (cloud.memberships || []).find((m) => m.user_id === userId) || {};
+  const membershipFor = (userId) => (cloud.memberships || []).find((m) => m.user_id === userId && (!cloud.organizationId || m.organization_id === cloud.organizationId)) || (cloud.memberships || []).find((m) => m.user_id === userId) || {};
   const memberOptions = [`<option value="">Not linked</option>`, ...activeMembers().map((m) => `<option value="${safe(m.id)}">${safe(memberName(m.id))} · ${safe(memberIdentifier(m))}</option>`)].join("");
   return `<section class="panel">
     <div class="panel-head">
@@ -2496,13 +2527,14 @@ function renderAdminUserManagement() {
     <p class="muted">Personal emails are allowed. New accounts stay pending until an Admin approves them and assigns a role.</p>
     ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Requested role</th><th>Assigned role</th><th>Linked member</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead><tbody>${rows.map((p) => {
       const membership = membershipFor(p.id);
+      const assignedRole = displayRoleForProfile(p, membership);
       return `<tr>
       <td data-label="Name">${safe(p.full_name || "")}</td>
       <td data-label="Email">${safe(p.email)}</td>
       <td data-label="Requested role">${safe(p.requested_role)}</td>
-      <td data-label="Assigned role"><select data-user-role="${p.id}">${permissionRoles.map((r) => `<option ${p.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td>
+      <td data-label="Assigned role"><select data-user-role="${p.id}">${permissionRoles.map((r) => `<option value="${safe(r)}" ${assignedRole === r ? "selected" : ""}>${safe(r)}</option>`).join("")}</select></td>
       <td data-label="Linked member"><select data-user-member="${p.id}">${memberOptions.replace(`value="${safe(membership.member_id || "")}"`, `value="${safe(membership.member_id || "")}" selected`)}</select></td>
-      <td data-label="Status"><span class="pill">${safe(p.approval_status)}</span></td>
+      <td data-label="Status"><span class="pill">${safe(labelize(p.approval_status || "pending"))}</span></td>
       <td data-label="Joined">${safe(p.created_at ? new Date(p.created_at).toLocaleDateString() : "")}</td>
       <td data-label="Actions"><div class="row-actions">
         <button class="small ghost" data-user-action="approve:${p.id}">Approve</button>
@@ -2831,25 +2863,47 @@ async function updateUserAccess(action, userId, role, memberId = "") {
   if (!cloud.client || !can("all")) return toast("Admin access required.");
   const target = cloud.profiles.find((p) => p.id === userId);
   if (!target) return toast("User not found.");
-  const status = action === "approve" || action === "role" ? "approved" : action === "reject" ? "rejected" : "disabled";
+  const selectedRole = displayRoleForProfile({ role }, {});
+  if (!permissionRoles.includes(selectedRole)) return toast("Choose a valid role before saving.");
+  const status = action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "disable" ? "disabled" : target.approval_status || "pending";
   if (action !== "role" && !confirm(`${labelize(action)} ${target.email}?`)) return;
-  const { error: profileError } = await cloud.client.from("profiles").update({ approval_status: status, role, updated_at: new Date().toISOString() }).eq("id", userId);
-  if (profileError) return toast(profileError.message);
+  const profilePatch = { approval_status: status, role: selectedRole, updated_at: new Date().toISOString() };
+  const { data: updatedProfile, error: profileError } = await cloud.client.from("profiles").update(profilePatch).eq("id", userId).select("*").single();
+  if (profileError) {
+    logSupabaseError("user profile role update failed", profileError);
+    return toast(formatSupabaseError(profileError, "Role could not be saved."));
+  }
   if (status === "approved") {
     const organizationId = await ensureCloudWorkspace();
-    const dbRole = toDbRole(role);
-    const { data: existing } = await cloud.client.from("organization_members").select("id").eq("user_id", userId).maybeSingle();
+    const dbRole = toDbRole(selectedRole);
+    const { data: existing, error: existingError } = await cloud.client
+      .from("organization_members")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (existingError) {
+      logSupabaseError("user membership lookup failed", existingError);
+      return toast(formatSupabaseError(existingError, "Role was saved, but membership could not be checked."));
+    }
     if (existing?.id) {
       const { error } = await cloud.client.from("organization_members").update({ role: dbRole, email: target.email, member_id: memberId || null, status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
-      if (error) return toast(error.message);
+      if (error) {
+        logSupabaseError("user membership role update failed", error);
+        return toast(formatSupabaseError(error, "Role was saved, but chapter access could not be updated."));
+      }
     } else {
       const { error } = await cloud.client.from("organization_members").insert({ organization_id: organizationId, user_id: userId, email: target.email, role: dbRole, member_id: memberId || null, status: "active" });
-      if (error) return toast(error.message);
+      if (error) {
+        logSupabaseError("user membership role insert failed", error);
+        return toast(formatSupabaseError(error, "Role was saved, but chapter access could not be created."));
+      }
     }
   }
+  if (userId === cloud.user?.id && updatedProfile) cloud.profile = updatedProfile;
   await loadProfilesForAdmin();
   render();
-  toast("User access updated.");
+  toast(action === "role" ? "Role saved." : "User access updated.");
 }
 
 function bindAuthActions(root = document) {
