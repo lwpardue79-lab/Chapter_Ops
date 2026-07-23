@@ -1268,12 +1268,14 @@ function renderApprovalGate() {
 function renderDashboard() {
   const m = metrics();
   const needsSetup = !state.settings.setupComplete || !state.settings.term || !state.settings.academicYear;
+  const alerts = commandAlerts(m);
   return `
     ${renderPageHeader("Command Center", `${productTagline} · Kansas State University`, [
       needsSetup ? ["Complete Setup", "primary", "settings"] : ["Add Member", "primary", "members:add"],
       ["Import Roster", "ghost", "members:import"]
     ])}
     ${needsSetup ? renderSetupPrompt() : ""}
+    ${alerts.length ? renderCommandAlerts(alerts) : ""}
     <div class="kpi-grid">
       ${metricCard("Active Members", m.members, "members")}
       ${metricCard("Outstanding Dues", money(m.outstanding), "finance", "outstanding=true")}
@@ -1295,6 +1297,8 @@ function renderDashboard() {
         ${priorityTile("Reports needing review", m.reportsAwaitingReview, "kpis")}
       </div>
     </section>
+    ${renderCommandReadiness()}
+    ${renderRoleFocusBoard(m)}
     <div class="three-col">
       ${listPanel("Financial snapshot", [
         `Expected total: ${money(m.totalBilled)}<span>Based on dues charges entered</span>`,
@@ -1330,6 +1334,85 @@ function renderSetupPrompt() {
   return `<section class="panel setup-panel compact-panel">
     <div class="panel-head"><div><p class="eyebrow">One secure workspace for chapter leadership.</p><h3>Chapter setup</h3><p class="muted">Manage members, recruitment, finances, attendance, officer responsibilities, and chapter reporting from one centralized platform. ${complete} of ${steps.length} steps complete.</p></div><button class="primary" data-go="settings">Complete Setup</button></div>
   </section>`;
+}
+
+function commandAlerts(m) {
+  const alerts = [];
+  if (m.pastDue) alerts.push({ label: `${m.pastDue} member${m.pastDue === 1 ? "" : "s"} past due`, view: "finance", tone: "bad" });
+  if (m.pnmFollowUps) alerts.push({ label: `${m.pnmFollowUps} PNM follow-up${m.pnmFollowUps === 1 ? "" : "s"} due`, view: "recruitment", tone: "warn" });
+  if (m.missingAttendance) alerts.push({ label: `${m.missingAttendance} event${m.missingAttendance === 1 ? "" : "s"} missing attendance`, view: "events", tone: "warn" });
+  if (m.reportsAwaitingReview) alerts.push({ label: `${m.reportsAwaitingReview} KPI report${m.reportsAwaitingReview === 1 ? "" : "s"} awaiting review`, view: "kpis", tone: "warn" });
+  const overdueTasks = openTasks().filter((t) => t.dueDate && t.dueDate < todayIso()).length;
+  if (overdueTasks) alerts.push({ label: `${overdueTasks} overdue officer task${overdueTasks === 1 ? "" : "s"}`, view: "tasks", tone: "bad" });
+  return alerts.slice(0, 5);
+}
+
+function renderCommandAlerts(alerts) {
+  return `<section class="command-alerts" aria-label="Command alerts">
+    ${alerts.map((alert) => `<button class="command-alert ${safe(alert.tone)}" data-go="${safe(alert.view)}">${safe(alert.label)}<span>Review</span></button>`).join("")}
+  </section>`;
+}
+
+function renderCommandReadiness() {
+  const checks = [
+    { label: "Chapter configured", done: Boolean(state.settings.setupComplete), view: "settings", action: "Complete Setup" },
+    { label: "Roster started", done: activeMembers().length > 0, view: "members", action: "Add Members" },
+    { label: "Leadership assigned", done: buildOfficerDirectory().executiveOfficers.length > 0, view: "leadership", action: "Add Leadership" },
+    { label: "Finance ledger active", done: financeLedgerRows("all").length > 0 && state.memberFinanceAccounts?.length > 0, view: "finance", action: "Open Finance" },
+    { label: "Attendance ready", done: Boolean(attendanceManager.data?.sessions?.length || state.events.length), view: "events", action: "Start Attendance" },
+    { label: "KPI cadence started", done: Boolean(state.kpiMeetings?.length), view: "kpis", action: "Create KPI Meeting" }
+  ];
+  const done = checks.filter((c) => c.done).length;
+  return `<section class="panel readiness-panel">
+    <div class="panel-head">
+      <div><h3>Launch readiness</h3><p class="muted">${done} of ${checks.length} operating areas are ready for live chapter use.</p></div>
+      <button class="ghost small" data-go="${done === checks.length ? "reports" : checks.find((c) => !c.done)?.view || "settings"}">${done === checks.length ? "Review Reports" : "Continue Setup"}</button>
+    </div>
+    <div class="readiness-list">
+      ${checks.map((check) => `<button class="readiness-item ${check.done ? "complete" : ""}" data-go="${safe(check.view)}"><span>${check.done ? "✓" : "○"}</span><strong>${safe(check.label)}</strong><em>${check.done ? "Ready" : safe(check.action)}</em></button>`).join("")}
+    </div>
+  </section>`;
+}
+
+function renderRoleFocusBoard(m) {
+  const presidentItems = [
+    `${m.reportsAwaitingReview} KPI reports awaiting review`,
+    `${openTasks().filter((t) => t.dueDate && t.dueDate < todayIso()).length} overdue officer tasks`
+  ];
+  const treasurerItems = [
+    `${money(m.outstanding)} outstanding dues`,
+    `${m.plans} payment plans`
+  ];
+  const secretaryItems = [
+    `${m.missingAttendance} missing attendance records`,
+    `${attendanceManager.data?.sessions?.filter((s) => s.status === "open").length || 0} open attendance sessions`
+  ];
+  const recruitmentItems = [
+    `${activePnms().length} active PNMs`,
+    `${m.pnmFollowUps} follow-ups due`
+  ];
+  const vpmdItems = [
+    `${activeMembers().filter((member) => member.followUpDate && member.followUpDate <= todayIso()).length} members needing follow-up`,
+    `${state.events.filter((event) => !event.archived && (event.type === "Brotherhood" || event.eventType === "Brotherhood" || event.event_category === "Brotherhood") && event.date >= todayIso()).length} upcoming brotherhood events`
+  ];
+  return `<section class="panel role-focus-panel">
+    <div class="panel-head"><div><h3>Role focus</h3><p class="muted">Quick views for the officers who run the chapter week to week.</p></div></div>
+    <div class="role-focus-grid">
+      ${roleFocusCard("President", "Executive oversight", presidentItems, "reports")}
+      ${roleFocusCard("Treasurer", "Dues and balances", treasurerItems, "finance")}
+      ${roleFocusCard("Secretary", "Attendance records", secretaryItems, "events")}
+      ${roleFocusCard("Recruitment", "PNM pipeline", recruitmentItems, "recruitment")}
+      ${roleFocusCard("VPMD · Brotherhood", "Member engagement", vpmdItems, "tasks")}
+    </div>
+  </section>`;
+}
+
+function roleFocusCard(title, subtitle, items, view) {
+  return `<button class="role-focus-card" data-go="${safe(view)}">
+    <span>${safe(subtitle)}</span>
+    <strong>${safe(title)}</strong>
+    <ul>${items.map((item) => `<li>${safe(item)}</li>`).join("")}</ul>
+  </button>`;
 }
 
 function getNextSteps() {
@@ -2223,8 +2306,28 @@ function renderSettings() {
       <div class="notice"><h4>Financial access</h4><p>Finance tools are limited to authorized chapter roles.</p></div>
       <div class="notice"><h4>Imports</h4><p>Use CSV imports to add rosters, balances, and attendance records.</p></div>
     </div>
+    ${renderTrustOperationsPanel()}
   </section>
   ${can("all") ? renderAdminUserManagement() : ""}`;
+}
+
+function renderTrustOperationsPanel() {
+  const safeguards = [
+    ["Account approval", "New users require approval before seeing chapter information."],
+    ["Role permissions", "Treasurer, Secretary, President, Advisor, and Active Member access stay separate."],
+    ["Finance privacy", "Dues and balance tools are limited to authorized finance roles."],
+    ["Member portal", "Members can access their own profile, balance, payments, attendance, tasks, calendar, and announcements."],
+    ["Activity history", "Important edits are recorded so leadership can review what changed."],
+    ["Export control", "Reports and CSV exports stay behind authenticated access."]
+  ];
+  return `<section class="trust-panel">
+    <div class="panel-head">
+      <div><h3>Platform controls</h3><p class="muted">Built for private chapter operations and accountable officer workflows.</p></div>
+    </div>
+    <div class="trust-grid">
+      ${safeguards.map(([title, body]) => `<div class="trust-card"><strong>${safe(title)}</strong><span>${safe(body)}</span></div>`).join("")}
+    </div>
+  </section>`;
 }
 
 function renderAdminUserManagement() {

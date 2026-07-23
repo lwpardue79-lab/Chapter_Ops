@@ -138,6 +138,139 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-size: 28px;
   letter-spacing: -0.04em;
 }
+.command-alerts {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: -4px 0 18px;
+}
+.command-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 8px 20px rgba(15, 32, 51, 0.06);
+}
+.command-alert span {
+  color: var(--brand-2);
+  font-size: 12px;
+}
+.command-alert.warn { border-color: #fde68a; background: #fffbeb; }
+.command-alert.bad { border-color: #fecaca; background: #fef2f2; color: var(--bad); }
+.readiness-panel .panel-head,
+.role-focus-panel .panel-head {
+  align-items: flex-start;
+}
+.readiness-list {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+.readiness-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 10px;
+  min-height: 78px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f8fbff;
+  text-align: left;
+}
+.readiness-item span {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: white;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  font-weight: 950;
+}
+.readiness-item strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+.readiness-item em {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+}
+.readiness-item.complete {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.readiness-item.complete span {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: var(--good);
+}
+.role-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.role-focus-card {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  text-align: left;
+  min-height: 150px;
+}
+.role-focus-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+.role-focus-card strong {
+  display: block;
+  margin: 5px 0 10px;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+}
+.role-focus-card ul {
+  margin: 0;
+  padding-left: 17px;
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 13px;
+}
+.trust-panel {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.trust-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.trust-card {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f8fbff;
+}
+.trust-card strong { font-size: 14px; }
+.trust-card span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
 .three-col, .card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 
@@ -349,7 +482,7 @@ button:disabled {
   .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .topbar, .hero, .panel-head, .page-header { align-items: flex-start; flex-direction: column; }
   .kpi-grid, .mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .quick-grid, .priority-grid, .three-col, .two-col, .card-grid, .settings-grid { grid-template-columns: 1fr; }
+  .quick-grid, .priority-grid, .readiness-list, .role-focus-grid, .trust-grid, .three-col, .two-col, .card-grid, .settings-grid { grid-template-columns: 1fr; }
   .form-grid, .form-grid.compact { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
@@ -363,6 +496,7 @@ button:disabled {
   .panel { padding: 15px; border-radius: 20px; }
   .kpi-card, .mini-card, .action-tile { padding: 15px; border-radius: 17px; }
   .kpi-grid, .mini-grid { grid-template-columns: 1fr; }
+  .command-alert { width: 100%; justify-content: space-between; }
   .attendance-summary { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .attendance-bulk > * { flex: 1 1 100%; }
   .attendance-table-wrap { max-height: none; border: 0; }
