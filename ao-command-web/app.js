@@ -39,7 +39,7 @@ const roleRules = {
   "Assistant Treasurer": ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "events.view", "brotherhood.events.admin.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
   Secretary: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.import", "members.export", "events.view", "brotherhood.events.admin.view", "attendance.view", "attendance.manage", "reports.attendance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
   VPMD: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.update", "members.export", "events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "attendance.view", "reports.member_development.view", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  Recruitment: ["workspace.full.read", "dashboard.role.view", "members.list.view", "events.view", "brotherhood.events.admin.view", "recruitment.view", "recruitment.manage", "attendance.view", "reports.recruitment.view", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  Recruitment: ["dashboard.role.view", "members.list.view", "recruitment.view", "recruitment.manage", "reports.recruitment.view", "kpi.view", "kpi.submit_own"],
   "Exec Board": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.export", "officers.view", "events.view", "brotherhood.events.admin.view", "recruitment.view", "attendance.view", "reports.executive.view", "kpi.view", "kpi.submit_own", "tasks.view_all"],
   "Committee Chair": ["workspace.full.read", "dashboard.role.view", "members.list.view", "events.view", "brotherhood.events.admin.view", "attendance.view", "attendance.manage", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
   "Active Member": ["member.portal.view", "members.self.view", "finance.self.view", "attendance.self.view", "events.member.view", "events.rsvp", "tasks.view_own"],
@@ -160,6 +160,7 @@ const can = (permission) => {
 const canManage = (area) => can(`manage_${area}`);
 const canAny = (permissions = []) => permissions.some(can);
 const isFullWorkspaceAllowed = () => can("workspace.full.read") || can("all");
+const isOperationsWorkspaceAllowed = () => isFullWorkspaceAllowed() || can("dashboard.role.view");
 
 function toDbRole(role = "") {
   const key = normalizeTitle(role);
@@ -416,7 +417,7 @@ async function bootstrapUser() {
   await ensureOwnProfile();
   if (cloud.profile?.approval_status === "approved") {
     state.settings.currentRole = resolvedRole();
-    if (isFullWorkspaceAllowed()) {
+    if (isOperationsWorkspaceAllowed()) {
       await loadCloudWorkspace();
       if (can("attendance.view")) await loadAttendanceManager();
       if (canAny(["events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "all"])) await loadBrotherhoodEvents();
@@ -445,7 +446,7 @@ function resetSensitiveClientState(role = "Active Member") {
 }
 
 async function loadMemberPortal() {
-  if (!cloud.client || !cloud.user || isFullWorkspaceAllowed()) return;
+  if (!cloud.client || !cloud.user || isOperationsWorkspaceAllowed()) return;
   memberPortal = { ...memberPortal, loading: true, error: "" };
   try {
     const { data, error } = await cloud.client.rpc("get_my_member_portal");
@@ -1264,7 +1265,7 @@ function render() {
     bindAuthActions(root);
     return;
   }
-  if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !isFullWorkspaceAllowed()) {
+  if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !isOperationsWorkspaceAllowed()) {
     root.innerHTML = renderMemberPortal();
     bindViewActions(root);
     bindAuthActions(root);
@@ -1301,7 +1302,7 @@ function refreshNavigation() {
     nav.innerHTML = "";
     return;
   }
-  if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !isFullWorkspaceAllowed()) {
+  if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !isOperationsWorkspaceAllowed()) {
     nav.innerHTML = memberNavigationItems.map((item) => `<button class="nav-item ${activePortalTab === item.tab ? "active" : ""}" data-member-tab="${safe(item.tab)}">${safe(item.label)}</button>`).join("");
     nav.querySelectorAll("[data-member-tab]").forEach((b) => b.addEventListener("click", () => setMemberPortalTab(b.dataset.memberTab)));
     return;
@@ -1317,7 +1318,7 @@ function routeAllowed(view = activeView) {
 }
 
 function defaultViewForRole() {
-  return isFullWorkspaceAllowed() ? "dashboard" : "portal";
+  return isOperationsWorkspaceAllowed() ? "dashboard" : "portal";
 }
 
 function applyLocationRoute() {
