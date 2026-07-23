@@ -1,6 +1,11 @@
-const storeKey = "chapterops_alpha_omega_real_v2";
-const oldStoreKeys = ["chapterops_alpha_omega_v1", "chapterops-lite-web-v1"];
-const orgStoreKey = "chapterops_cloud_org_id";
+const productName = "AO Command";
+const productDescription = "Alpha Omega Chapter Management Platform";
+const productTagline = "The operating system for Alpha Omega.";
+const productVersion = "AO Command v1.0";
+const chapterFooter = "Alpha Omega Chapter · Pi Kappa Alpha";
+const storeKey = "ao_command_alpha_omega_v2";
+const oldStoreKeys = [];
+const orgStoreKey = "ao_command_org_id";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const money = (n) => Number(n || 0).toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -8,19 +13,19 @@ const pct = (n, d) => d ? `${Math.round((n / d) * 100)}%` : "0%";
 const uid = (prefix) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 const safe = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[c]));
 const parseMoney = (v) => parseMoneyToCents(v) / 100;
-const setupDebug = (...args) => console.info("[ChapterOps setup]", ...args);
+const setupDebug = (...args) => console.info("[AO Command setup]", ...args);
 
 const viewNames = {
-  dashboard: "Dashboard",
-  members: "Members",
-  leadership: "Executive Team",
-  recruitment: "Recruitment",
-  events: "Attendance",
-  finance: "Finance",
+  dashboard: "Command Center",
+  members: "Member Directory",
+  leadership: "Leadership",
+  recruitment: "Recruitment Pipeline",
+  events: "Events & Attendance",
+  finance: "Financial Operations",
   kpis: "KPI Reports",
-  tasks: "Tasks",
-  reports: "Reports",
-  settings: "Settings",
+  tasks: "Action Center",
+  reports: "Reports & Analytics",
+  settings: "Administration",
   portal: "Member Portal"
 };
 
@@ -51,16 +56,16 @@ const legacyPermissionMap = {
   manage_own_tasks: "tasks.view_own"
 };
 const navigationItems = [
-  { view: "dashboard", label: "Dashboard", permission: "dashboard.executive.view" },
-  { view: "members", label: "Members", permission: "members.list.view" },
-  { view: "leadership", label: "Executive Team", permission: "officers.view" },
-  { view: "recruitment", label: "Recruitment", permission: "recruitment.view" },
-  { view: "events", label: "Attendance", permission: "attendance.view" },
-  { view: "finance", label: "Finance", permission: "finance.member_balances.view" },
+  { view: "dashboard", label: "Command Center", permission: "dashboard.executive.view" },
+  { view: "members", label: "Member Directory", permission: "members.list.view" },
+  { view: "leadership", label: "Leadership", permission: "officers.view" },
+  { view: "recruitment", label: "Recruitment Pipeline", permission: "recruitment.view" },
+  { view: "events", label: "Events & Attendance", permission: "attendance.view" },
+  { view: "finance", label: "Financial Operations", permission: "finance.member_balances.view" },
   { view: "kpis", label: "KPI Reports", permission: "kpi.view" },
-  { view: "tasks", label: "Tasks", permission: "tasks.view_all" },
-  { view: "reports", label: "Reports", permission: "reports.executive.view" },
-  { view: "settings", label: "Settings", permission: "settings.view" }
+  { view: "tasks", label: "Action Center", permission: "tasks.view_all" },
+  { view: "reports", label: "Reports & Analytics", permission: "reports.executive.view" },
+  { view: "settings", label: "Administration", permission: "settings.view" }
 ];
 const memberNavigationItems = [
   { tab: "home", label: "Home" },
@@ -162,7 +167,7 @@ function formatSupabaseError(err, fallback = "Request failed.") {
 }
 
 function logSupabaseError(scope, err) {
-  console.error(`[ChapterOps ${scope}]`, {
+  console.error(`[AO Command ${scope}]`, {
     code: err?.code || "",
     message: err?.message || "",
     details: err?.details || "",
@@ -171,7 +176,7 @@ function logSupabaseError(scope, err) {
 }
 
 function importDebug(...args) {
-  console.info("[ChapterOps import]", ...args);
+  console.info("[AO Command import]", ...args);
 }
 
 function emptyWorkspace() {
@@ -194,7 +199,7 @@ function emptyWorkspace() {
       committees: [...defaults.committees],
       permissionRoles: [...permissionRoles],
       setupComplete: false,
-      privacyNotice: "ChapterOps Lite is for Alpha Omega chapter operations only. Sign in before entering real member, dues, attendance, PNM, or finance information. Financial notes and sensitive notes should be limited to necessary chapter operations."
+      privacyNotice: "AO Command is for Alpha Omega chapter operations only. Sign in before entering member, dues, attendance, PNM, or finance information. Financial notes and sensitive notes should be limited to necessary chapter operations."
     },
     members: [],
     pnms: [],
@@ -215,7 +220,7 @@ function emptyWorkspace() {
 
 function load() {
   try {
-    const saved = localStorage.getItem(storeKey);
+    const saved = localStorage.getItem(storeKey) || oldStoreKeys.map((key) => localStorage.getItem(key)).find(Boolean);
     return saved ? normalize(JSON.parse(saved)) : emptyWorkspace();
   } catch {
     return emptyWorkspace();
@@ -274,7 +279,7 @@ function logActivity(action, related = {}) {
 }
 
 async function initCloud() {
-  const cfg = window.CHAPTEROPS_CONFIG;
+  const cfg = window.AO_COMMAND_CONFIG;
   if (!window.supabase || !cfg?.supabaseUrl || !cfg?.supabasePublishableKey) return updateCloudUi("Local mode — sign-in unavailable");
   cloud.client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey);
   const { data } = await cloud.client.auth.getSession();
@@ -299,9 +304,10 @@ function updateCloudUi(message) {
   document.getElementById("signInBtn").classList.toggle("hidden", !!cloud.user);
   document.getElementById("syncBtn").classList.toggle("hidden", !cloud.user || !isFullWorkspaceAllowed());
   document.getElementById("signOutBtn").classList.toggle("hidden", !cloud.user);
-  document.getElementById("importBtn").classList.toggle("hidden", cloud.client && !canAny(["members.import", "finance.import", "backup.restore", "all"]));
-  document.getElementById("exportBtn").classList.toggle("hidden", cloud.client && !canAny(["backup.create", "reports.export", "members.export", "finance.export", "all"]));
-  document.getElementById("resetBtn").classList.toggle("hidden", cloud.client && !can("workspace.clear"));
+  document.getElementById("undoBtn").classList.toggle("hidden", !cloud.user || !isFullWorkspaceAllowed());
+  document.getElementById("importBtn").classList.toggle("hidden", !cloud.user || (cloud.client && !canAny(["members.import", "finance.import", "backup.restore", "all"])));
+  document.getElementById("exportBtn").classList.toggle("hidden", !cloud.user || (cloud.client && !canAny(["backup.create", "reports.export", "members.export", "finance.export", "all"])));
+  document.getElementById("resetBtn").classList.toggle("hidden", !cloud.user || (cloud.client && !can("workspace.clear")));
 }
 
 async function signIn() {
@@ -686,6 +692,10 @@ function metrics() {
   const totalCollected = financeRows().filter((f) => f.type === "Payment").reduce((s, f) => s + parseMoney(f.amount), 0);
   const bidsExtended = state.pnms.filter((p) => ["Bid extended", "Accepted", "Declined"].includes(p.status) || p.bidExtendedDate).length;
   const bidsAccepted = state.pnms.filter((p) => p.status === "Accepted" || p.bidAcceptedDate).length;
+  const attendanceRecords = state.attendance.filter((a) => a.personType === "Member" || a.memberId || a.personId);
+  const attendedRecords = attendanceRecords.filter((a) => ["Present", "Late", "Excused", "present", "late", "excused"].includes(a.status));
+  const reportSummary = state.kpiMeetings?.length ? kpiMeetingSummary(state.kpiMeetings[0].id) : { missingReports: 0 };
+  const expenseTotal = financeRows().filter((f) => ["Expense", "Reimbursement", "Refund"].includes(f.type)).reduce((s, f) => s + parseMoney(f.amount), 0);
   return {
     members: activeMembers().length,
     newMembers: activeMembers().filter((m) => m.initiationStatus === "New Member" || m.memberStatus === "New Member").length,
@@ -703,6 +713,10 @@ function metrics() {
     plans: ledgerTotals.paymentPlans,
     credits: ledgerTotals.credits,
     pnmFollowUps: activePnms().filter((p) => p.followUpDate && p.followUpDate <= todayIso()).length,
+    attendanceRate: attendanceRecords.length ? pct(attendedRecords.length, attendanceRecords.length) : "0%",
+    missingAttendance: state.events.filter((e) => !e.archived && e.date && e.date <= todayIso() && !state.attendance.some((a) => a.eventId === e.id)).length,
+    budgetRemaining: totalCollected - expenseTotal,
+    reportsAwaitingReview: reportSummary.missingReports || 0,
     bidsExtended,
     bidsAccepted,
     acceptanceRate: pct(bidsAccepted, bidsExtended)
@@ -841,7 +855,7 @@ function buildOfficerDirectory() {
 
 const collectionMeta = {
   members: {
-    title: "Member roster",
+    title: "Member Directory",
     permission: "manage_members",
     addLabel: "Add member",
     emptyTitle: "No members added",
@@ -856,7 +870,7 @@ const collectionMeta = {
     ]
   },
   pnms: {
-    title: "PNM tracking",
+    title: "Recruitment Pipeline",
     permission: "manage_recruitment",
     addLabel: "Add PNM",
     emptyTitle: "No PNMs added",
@@ -870,7 +884,7 @@ const collectionMeta = {
     ]
   },
   events: {
-    title: "Events and attendance",
+    title: "Events & Attendance",
     permission: "manage_events",
     addLabel: "Add event",
     emptyTitle: "No events added",
@@ -883,7 +897,7 @@ const collectionMeta = {
     ]
   },
   finance: {
-    title: "Treasurer dues ledger",
+    title: "Financial Operations",
     permission: "manage_finance",
     addLabel: "Add dues charge / payment",
     emptyTitle: "No finance records available",
@@ -897,7 +911,7 @@ const collectionMeta = {
     ]
   },
   tasks: {
-    title: "Officer tasks and follow-ups",
+    title: "Action Center",
     permission: "manage_tasks",
     addLabel: "Create task",
     emptyTitle: "No tasks created",
@@ -914,8 +928,9 @@ const collectionMeta = {
 function render() {
   refreshNavigation();
   if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !routeAllowed(activeView)) activeView = defaultViewForRole();
-  document.getElementById("viewTitle").textContent = viewNames[activeView];
-  document.getElementById("orgLabel").textContent = `${state.settings.chapterName} · ${state.settings.schoolName}`;
+  const signedOut = cloud.client && !cloud.user;
+  document.getElementById("viewTitle").textContent = signedOut ? productName : viewNames[activeView];
+  document.getElementById("orgLabel").textContent = signedOut ? productDescription : `${state.settings.chapterName} · ${state.settings.schoolName}`;
   document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.view === activeView || b.dataset.memberTab === activePortalTab));
   document.getElementById("resetBtn").textContent = "Clear local data";
   updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required");
@@ -961,6 +976,10 @@ function render() {
 function refreshNavigation() {
   const nav = document.querySelector(".nav");
   if (!nav) return;
+  if (cloud.client && !cloud.user) {
+    nav.innerHTML = "";
+    return;
+  }
   if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !isFullWorkspaceAllowed()) {
     nav.innerHTML = memberNavigationItems.map((item) => `<button class="nav-item ${activePortalTab === item.tab ? "active" : ""}" data-member-tab="${safe(item.tab)}">${safe(item.label)}</button>`).join("");
     nav.querySelectorAll("[data-member-tab]").forEach((b) => b.addEventListener("click", () => setMemberPortalTab(b.dataset.memberTab)));
@@ -1022,7 +1041,7 @@ function renderMemberPortal() {
     <div class="auth-card">
       <p class="eyebrow">Account setup incomplete</p>
       <h3>Your account has not yet been connected to your chapter member profile.</h3>
-      <p class="muted">Contact a chapter administrator to link your ChapterOps login to your member profile.</p>
+      <p class="muted">Contact a chapter administrator to link your AO Command login to your member profile.</p>
       <div class="profile-grid">
         <div><span>Email</span><strong>${safe(cloud.profile?.email || cloud.user?.email || "")}</strong></div>
         <div><span>Role</span><strong>${safe(resolvedRole())}</strong></div>
@@ -1200,17 +1219,20 @@ function renderHeaderAction(label, style = "ghost", target = "") {
 }
 
 function renderLoginGate() {
-  return `<section class="auth-shell">
-    <div class="auth-card">
-      <p class="eyebrow">ChapterOps</p>
-      <h3>Alpha Omega Chapter</h3>
-      <p class="muted">Kansas State University · Pi Kappa Alpha</p>
-      <p>Sign in to access chapter operations.</p>
+  return `<section class="auth-shell landing-shell">
+    <div class="auth-card landing-card">
+      <div class="landing-mark" aria-hidden="true">AO</div>
+      <p class="eyebrow">${safe(productDescription)}</p>
+      <h3>${safe(productName)}</h3>
+      <p class="landing-tagline">${safe(productTagline)}</p>
+      <p class="muted">One secure workspace for members, recruitment, attendance, finances, events, officer responsibilities, and chapter reporting.</p>
       <form id="loginForm" class="auth-form">
         <label>Email address<input name="email" type="email" autocomplete="email" placeholder="name@email.com" required /></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
         <button class="primary" type="submit">Sign in</button>
       </form>
+      <p class="auth-note">Authorized access for Alpha Omega chapter leadership and members.</p>
+      <p class="privacy-note">Private chapter information. Unauthorized access is prohibited.</p>
       <div class="button-row">
         <button class="ghost" data-auth-mode="signup">Request access</button>
         <button class="ghost" data-auth-mode="reset">Forgot password</button>
@@ -1226,7 +1248,7 @@ function renderApprovalGate() {
     ? "Your request was submitted. An Admin must approve your account and assign a role before you can access private chapter data."
     : status === "disabled"
       ? "This account has been disabled. Contact an Admin if this is unexpected."
-      : "This account is not approved for ChapterOps access. Contact an Admin if this is unexpected.";
+      : "This account is not approved for AO Command access. Contact an Admin if this is unexpected.";
   return `<section class="auth-shell">
     <div class="auth-card">
       <p class="eyebrow">Request access</p>
@@ -1247,27 +1269,34 @@ function renderDashboard() {
   const m = metrics();
   const needsSetup = !state.settings.setupComplete || !state.settings.term || !state.settings.academicYear;
   return `
-    ${renderPageHeader("Alpha Omega Chapter Operations", "Kansas State University · Pi Kappa Alpha", [
+    ${renderPageHeader("Command Center", `${productTagline} · Kansas State University`, [
       needsSetup ? ["Complete Setup", "primary", "settings"] : ["Add Member", "primary", "members:add"],
       ["Import Roster", "ghost", "members:import"]
     ])}
     ${needsSetup ? renderSetupPrompt() : ""}
     <div class="kpi-grid">
-      ${metricCard("Active members", m.members, "members")}
-      ${metricCard("New members", m.newMembers, "members", "memberStatus=New Member")}
-      ${metricCard("PNMs", m.pnms, "recruitment")}
-      ${metricCard("Upcoming events", m.events, "events")}
-      ${metricCard("Total dues billed", money(m.totalBilled), "finance")}
-      ${metricCard("Dues collected", money(m.totalCollected), "finance", "type=Payment")}
-      ${metricCard("Outstanding balance", money(m.outstanding), "finance", "outstanding=true")}
-      ${metricCard("Past due members", m.pastDue, "finance", "pastdue=true")}
-      ${metricCard("Unpaid", m.unpaid, "finance", "status=Unpaid")}
-      ${metricCard("Partially paid", m.partial, "finance", "status=Partially paid")}
-      ${metricCard("Paid", m.paid, "finance", "status=Paid")}
-      ${metricCard("Open tasks", m.tasks, "tasks", "status=open")}
+      ${metricCard("Active Members", m.members, "members")}
+      ${metricCard("Outstanding Dues", money(m.outstanding), "finance", "outstanding=true")}
+      ${metricCard("Open Officer Tasks", m.tasks, "tasks", "status=open")}
+      ${metricCard("Upcoming Events", m.events, "events")}
+      ${metricCard("PNMs Requiring Follow-Up", m.pnmFollowUps, "recruitment")}
+      ${metricCard("Chapter Attendance Rate", m.attendanceRate, "events")}
+      ${metricCard("Budget Remaining", money(m.budgetRemaining), "finance")}
+      ${metricCard("Reports Awaiting Review", m.reportsAwaitingReview, "kpis")}
     </div>
+    <section class="panel">
+      <div class="panel-head"><div><h3>Executive Priorities</h3><p class="muted">Items that may need attention before the next leadership meeting.</p></div></div>
+      <div class="quick-grid priority-grid">
+        ${priorityTile("Overdue dues", m.pastDue, "finance", "pastdue=true")}
+        ${priorityTile("Overdue officer tasks", openTasks().filter((t) => t.dueDate && t.dueDate < todayIso()).length, "tasks", "status=open")}
+        ${priorityTile("PNMs needing follow-up", m.pnmFollowUps, "recruitment")}
+        ${priorityTile("Missing attendance records", m.missingAttendance, "events")}
+        ${priorityTile("Upcoming deadlines", openTasks().filter((t) => t.dueDate && t.dueDate >= todayIso()).length, "tasks")}
+        ${priorityTile("Reports needing review", m.reportsAwaitingReview, "kpis")}
+      </div>
+    </section>
     <div class="three-col">
-      ${listPanel("Treasurer snapshot", [
+      ${listPanel("Financial snapshot", [
         `Expected total: ${money(m.totalBilled)}<span>Based on dues charges entered</span>`,
         `Collected: ${money(m.totalCollected)}<span>Payments recorded</span>`,
         `Payment plans: ${m.plans}<span>Members marked on payment plans</span>`
@@ -1299,7 +1328,7 @@ function renderSetupPrompt() {
   ];
   const complete = steps.filter(Boolean).length;
   return `<section class="panel setup-panel compact-panel">
-    <div class="panel-head"><div><p class="eyebrow">Setup</p><h3>Chapter setup</h3><p class="muted">${complete} of ${steps.length} steps complete</p></div><button class="primary" data-go="settings">Continue setup</button></div>
+    <div class="panel-head"><div><p class="eyebrow">One secure workspace for chapter leadership.</p><h3>Chapter setup</h3><p class="muted">Manage members, recruitment, finances, attendance, officer responsibilities, and chapter reporting from one centralized platform. ${complete} of ${steps.length} steps complete.</p></div><button class="primary" data-go="settings">Complete Setup</button></div>
   </section>`;
 }
 
@@ -1315,6 +1344,10 @@ function getNextSteps() {
 
 function metricCard(label, value, view, filter = "") {
   return `<button class="kpi-card" data-go="${view}" data-filter="${safe(filter)}"><span>${label}</span><strong>${value}</strong><em>Open records</em></button>`;
+}
+
+function priorityTile(label, value, view, filter = "") {
+  return `<button class="action-tile priority-tile" data-go="${view}" data-filter="${safe(filter)}"><span>${safe(label)}</span><strong>${safe(value)}</strong></button>`;
 }
 
 function listPanel(title, rows, view) {
@@ -1347,7 +1380,7 @@ function renderCollection(key) {
 }
 
 function pageTitleForKey(key) {
-  return { members: "Members", pnms: "Recruitment", events: "Attendance", finance: "Finance", tasks: "Tasks" }[key] || collectionMeta[key]?.title || labelize(key);
+  return { members: "Member Directory", pnms: "Recruitment Pipeline", events: "Events & Attendance", finance: "Financial Operations", tasks: "Action Center" }[key] || collectionMeta[key]?.title || labelize(key);
 }
 
 function pageSubtitleForKey(key) {
@@ -1377,7 +1410,7 @@ function renderFinanceLedger() {
   ];
   return `<section class="panel finance-ledger">
     <div class="panel-head page-panel-head">
-      <div><h3>Finance</h3><p class="muted">Member balances, charges, payments, and payment plans.</p></div>
+      <div><h3>Financial Operations</h3><p class="muted">Member balances, charges, payments, and payment plans.</p></div>
       <div class="button-row">
         <input class="search" id="searchInput" placeholder="Search name, member ID, status, balances" value="${safe(filter.q || "")}" />
         ${can("finance.import") ? `<button class="ghost" data-import="finance">Import Finance CSV</button>` : ""}
@@ -1450,7 +1483,7 @@ function formatFinanceCell(row, key) {
 }
 
 function renderFinanceEmptyState() {
-  if (!activeMembers().length) return `<div class="empty-state"><h3>No members added</h3><p>Add members before entering balances.</p><div class="button-row centered"><button class="primary" data-go="members">Open Members</button><button class="ghost" data-import="members">Import Roster</button></div></div>`;
+  if (!activeMembers().length) return `<div class="empty-state"><h3>No members added</h3><p>Add members before entering balances.</p><div class="button-row centered"><button class="primary" data-go="members">Open Member Directory</button><button class="ghost" data-import="members">Import Roster</button></div></div>`;
   return `<div class="empty-state"><h3>No finance rows match</h3><p>Adjust filters or import balances.</p><div class="button-row centered"><button class="primary" data-finance-filter="all">Clear Filters</button><button class="ghost" data-import="finance">Import Finance</button></div></div>`;
 }
 
@@ -1701,11 +1734,11 @@ function renderLeadership() {
   const directory = buildOfficerDirectory();
   const hasRows = directory.allOfficers.length;
   return `<section class="panel">
-    <div class="panel-head page-panel-head"><div><h3>Executive Team</h3><p class="muted">Current chapter leadership and officer assignments.</p></div><button class="primary" data-add-leadership>Add Role</button></div>
+    <div class="panel-head page-panel-head"><div><h3>Leadership</h3><p class="muted">Current chapter leadership and officer assignments.</p></div><button class="primary" data-add-leadership>Add Role</button></div>
     ${hasRows ? `
       ${renderOfficerSection("Current Officers", directory.executiveOfficers, "")}
       ${renderLeadershipRoster()}
-    ` : `<div class="empty-state"><h3>No Executive Team roles assigned</h3><p>Add officer assignments to build the leadership directory.</p><button class="primary" data-add-leadership>Add Role</button></div>`}
+    ` : `<div class="empty-state"><h3>No leadership roles assigned</h3><p>Add officer assignments to build the leadership directory.</p><button class="primary" data-add-leadership>Add Role</button></div>`}
   </section>`;
 }
 
@@ -1753,8 +1786,8 @@ function renderReports() {
   const officerDirectory = buildOfficerDirectory();
   const reportsEmpty = !state.members.length && !state.finance.length && !state.events.length && !state.tasks.length;
   return `<section class="panel printable">
-    <div class="panel-head"><div><p class="eyebrow">Reports</p><h3>Executive and Treasurer reports</h3></div><div class="button-row"><button class="ghost" data-export="reports">Export summary CSV</button><button class="primary" data-print>PDF / Print</button></div></div>
-    ${reportsEmpty ? `<div class="empty-state"><h3>Reports will populate once data is entered.</h3><p>Add members, dues charges, payments, events, attendance, and tasks to generate useful reports.</p><div class="button-row centered"><button class="primary" data-go="members">Add members</button><button class="ghost" data-go="finance">Open finance</button></div></div>` : ""}
+    <div class="panel-head"><div><p class="eyebrow">Reports & Analytics</p><h3>Executive and Treasurer reports</h3></div><div class="button-row"><button class="ghost" data-export="reports">Export summary CSV</button><button class="primary" data-print>PDF / Print</button></div></div>
+    ${reportsEmpty ? `<div class="empty-state"><h3>Reports will populate once data is entered.</h3><p>Add members, dues charges, payments, events, attendance, and tasks to generate useful reports.</p><div class="button-row centered"><button class="primary" data-go="members">Add members</button><button class="ghost" data-go="finance">Open Financial Operations</button></div></div>` : ""}
     <div class="mini-grid">
       ${mini("Member roster", state.members.filter((m) => !m.archived).length)}
       ${mini("Dues report", money(m.totalBilled))}
@@ -2155,11 +2188,11 @@ function reportBlock(title, lines) {
 }
 
 function renderSettings() {
-  if (!can("settings.view") && !can("settings.manage") && !can("all")) return restrictedPanel("Settings are restricted to chapter administrators.");
+  if (!can("settings.view") && !can("settings.manage") && !can("all")) return restrictedPanel("Administration is restricted to chapter administrators.");
   const saveLabel = setupSave.saving ? "Saving…" : "Save setup";
   const fieldError = (key) => setupSave.fieldErrors?.[key] ? `<p class="field-error">${safe(setupSave.fieldErrors[key])}</p>` : "";
   return `<section class="panel">
-    <div class="panel-head"><div><p class="eyebrow">First-time setup</p><h3>Chapter configuration</h3></div>${can("settings.manage") || can("chapter.setup") || can("all") ? `<button class="primary" data-save-settings ${setupSave.saving ? "disabled" : ""}>${saveLabel}</button>` : ""}</div>
+    <div class="panel-head"><div><p class="eyebrow">Administration · ${safe(productVersion)}</p><h3>Chapter configuration</h3></div>${can("settings.manage") || can("chapter.setup") || can("all") ? `<button class="primary" data-save-settings ${setupSave.saving ? "disabled" : ""}>${saveLabel}</button>` : ""}</div>
     ${setupSave.error ? `<div class="notice error-notice"><h4>Setup could not be saved</h4><p>${safe(setupSave.error)}</p><button class="ghost" data-save-settings ${setupSave.saving ? "disabled" : ""}>Retry save</button></div>` : ""}
     ${setupSave.success ? `<div class="notice success-notice"><h4>Chapter setup saved successfully</h4><p>${safe(setupSave.success)}</p></div>` : ""}
     <div class="form-grid">
@@ -2575,8 +2608,8 @@ function openAuthModal(mode = "signin") {
   const isReset = mode === "reset";
   openModal(`<section class="auth-modal">
     <p class="eyebrow">${isSignup ? "Request access" : isReset ? "Password reset" : "Sign in"}</p>
-    <h3>${isSignup ? "Request a ChapterOps account" : isReset ? "Reset your password" : "Sign in to ChapterOps"}</h3>
-    <p class="muted">${isSignup ? "Use an email and password. You may need to confirm your email before signing in." : isReset ? "Enter your email and we will send a secure reset link." : "Enter the email and password for your ChapterOps account."}</p>
+    <h3>${isSignup ? "Request an AO Command account" : isReset ? "Reset your password" : "Sign in to AO Command"}</h3>
+    <p class="muted">${isSignup ? "Use an email and password. You may need to confirm your email before signing in." : isReset ? "Enter your email and we will send a secure reset link." : "Enter the email and password for your AO Command account."}</p>
     <form id="authModalForm" class="form-grid">
       ${isSignup ? `<label class="wide">Full name<input name="fullName" autocomplete="name" /></label>` : ""}
       <label class="wide">Email address<input name="email" type="email" autocomplete="email" placeholder="name@email.com" required /></label>
@@ -2604,7 +2637,7 @@ function openAuthModal(mode = "signin") {
 function openNewPasswordModal() {
   openModal(`<section class="auth-modal">
     <p class="eyebrow">Set new password</p>
-    <h3>Create a new ChapterOps password</h3>
+    <h3>Create a new AO Command password</h3>
     <p class="muted">Your reset link was accepted. Enter a new password to finish account recovery.</p>
     <form id="newPasswordForm" class="form-grid">
       <label class="wide">New password<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
@@ -2773,7 +2806,7 @@ async function archiveMemberInCloud(memberId) {
     cloud.user = sessionData.session?.user || cloud.user;
     if (!cloud.user?.id) throw new Error("You must be signed in to remove a member.");
     const organizationId = await ensureCloudWorkspace();
-    console.info("[ChapterOps delete]", { userId: cloud.user.id, organizationId, memberId, dependencySummary: deps });
+    console.info("[AO Command delete]", { userId: cloud.user.id, organizationId, memberId, dependencySummary: deps });
     const { data, error } = await cloud.client.rpc("archive_member_in_workspace", { p_member_id: memberId });
     if (error) throw error;
     const result = Array.isArray(data) ? data[0] : data;
@@ -2897,7 +2930,7 @@ async function saveFinanceAccounts(accounts, successMessage = "Finance ledger sa
     cloud.user = sessionData.session?.user || cloud.user;
     if (!cloud.user?.id) throw new Error("You must be signed in to save finance data.");
     const organizationId = await ensureCloudWorkspace();
-    console.info("[ChapterOps finance]", { userId: cloud.user.id, organizationId, rows: accounts.length, targetTable: "workspace_state.data.financeAccounts" });
+    console.info("[AO Command finance]", { userId: cloud.user.id, organizationId, rows: accounts.length, targetTable: "workspace_state.data.financeAccounts" });
     const { data, error } = await cloud.client.rpc("upsert_finance_accounts_to_workspace", { p_accounts: accounts, p_transactions: options.transactions || [] });
     if (error) throw error;
     const result = Array.isArray(data) ? data[0] : data;
@@ -3076,7 +3109,7 @@ async function saveSettingsForm() {
     return;
   }
 
-  snapshot("Settings updated", { type: "settings" });
+  snapshot("Administration updated", { type: "settings" });
   setupSave = { saving: true, error: "", success: "", fieldErrors: {} };
   render();
   setupDebug("submitting", {
@@ -3635,7 +3668,7 @@ function exportRows(key) {
 }
 
 function downloadFinanceTemplate() {
-  download("chapterops-finance-template.csv", [
+  download("ao-command-finance-template.csv", [
     "lastName,firstName,memberId,status,memberType,pendingCharge,paymentPlan,currentBalance,totalBalance"
   ].join("\n"), "text/csv");
 }
@@ -3650,7 +3683,7 @@ function download(name, content, type) {
 
 function exportBackup() {
   if (!can("backup.create") && !can("all")) return toast("Admin access required to create backups.");
-  download("chapterops-alpha-omega-backup.json", JSON.stringify(state, null, 2), "application/json");
+  download("ao-command-alpha-omega-backup.json", JSON.stringify(state, null, 2), "application/json");
 }
 
 function undo() {

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { Workbook, SpreadsheetFile } from '@oai/artifact-tool';
 
-const outDir = 'outputs/chapterops-lite';
+const outDir = 'outputs/ao-command';
 await fs.mkdir(outDir, { recursive: true });
 const wb = Workbook.create();
 const names = ['Members','Events','Attendance','Dues','Reimbursements','Dashboard','Settings','Weekly_Report'];
@@ -89,13 +89,13 @@ sheets.Dues.getRange('F2:F200').conditionalFormats.add('cellIs',{operator:'great
 sheets.Reimbursements.getRange('I2:I200').conditionalFormats.add('containsText',{text:'Pending',format:{fill:amber,font:{color:'#92400E'}}});
 
 // Settings
-const settings=[['chapter_name','Demo Chapter / Student Organization'],['exec_email_list','president@example.org, treasurer@example.org, secretary@example.org'],['attendance_threshold',0.8],['report_day','Monday'],['report_sender_name','ChapterOps Lite']];
+const settings=[['chapter_name','Alpha Omega Chapter'],['exec_email_list','president@example.org, treasurer@example.org, secretary@example.org'],['attendance_threshold',0.8],['report_day','Monday'],['report_sender_name','AO Command']];
 setupData('Settings',settings,[28,68]); sheets.Settings.getRange('B4').setNumberFormat('0%');
 
 // Dashboard
-const d=sheets.Dashboard; d.showGridLines=false; d.getRange('A1:F1').merge(); d.getRange('A1').values=[['ChapterOps Lite Dashboard']];
+const d=sheets.Dashboard; d.showGridLines=false; d.getRange('A1:F1').merge(); d.getRange('A1').values=[['AO Command Dashboard']];
 d.getRange('A1:F1').format.fill=navy; d.getRange('A1:F1').format.font={name:'Arial',size:18,bold:true,color:white}; d.getRange('A1:F1').format.rowHeight=40;
-d.getRange('A2:F2').merge(); d.getRange('A2').values=[['Live operating snapshot • Use the ChapterOps menu in Google Sheets to refresh']]; d.getRange('A2:F2').format.font={name:'Arial',size:10,color:gray};
+d.getRange('A2:F2').merge(); d.getRange('A2').values=[['Live operating snapshot • Use the AO Command menu in Google Sheets to refresh']]; d.getRange('A2:F2').format.font={name:'Arial',size:10,color:gray};
 const metrics=[
  ['Membership','Total active members',"=COUNTIF('Members'!$J$2:$J$200,\"Active\")",'people'],
  ['Membership','Total associate/new members',"=COUNTIFS('Members'!$F$2:$F$200,\"Associate/New Member\",'Members'!$J$2:$J$200,\"Active\")",'people'],
@@ -115,7 +115,7 @@ d.getRange('C7').setNumberFormat('0.0%'); d.getRange('C9:C11').setNumberFormat('
 d.getRange('A4:D15').format.borders={preset:'all',style:'thin',color:'#D8E1EA'}; d.getRange('A5:D15').format.fill=pale; d.getRange('C5:C15').format.font={bold:true,color:navy,size:12};
 d.getRange('A17:F17').merge(); d.getRange('A17').values=[['Members needing attendance follow-up']]; d.getRange('A17:F17').format.fill=navy; d.getRange('A17:F17').format.font={bold:true,color:white};
 d.getRange('A18:D18').values=[['member_id','member_name','required attendance rate','follow_up']]; d.getRange('A18:D18').format.fill=lightBlue; d.getRange('A18:D18').format.font={bold:true,color:navy};
-d.getRange('A19:D19').values=[['Run “Refresh Dashboard” in Google Sheets to populate this list.','','','']];
+d.getRange('A19:D19').values=[['Run “Refresh Command Center” in Google Sheets to populate this list.','','','']];
 d.getRange('A24:C24').values=[['Attendance calculation helper','Member','Rate']]; d.getRange('A24:C24').format.fill=lightBlue; d.getRange('A24:C24').format.font={bold:true,color:navy};
 const activeMembers=members.filter(m=>m[9]==='Active');
 d.getRange('A25:B31').values=activeMembers.map(m=>[m[0],m[1]+' '+m[2]]);
@@ -123,9 +123,9 @@ d.getRange('C25:C31').formulas=activeMembers.map((m,i)=>[`=IFERROR((COUNTIFS('At
 d.getRange('C25:C31').setNumberFormat('0.0%');
 d.getRange('A1:A30').format.columnWidth=22; d.getRange('B1:B30').format.columnWidth=38; d.getRange('C1:C30').format.columnWidth=20; d.getRange('D1:D30').format.columnWidth=18; d.freezePanes.freezeRows(2);
 
-// Weekly report template with sample generated content
+// Weekly report template with starter generated content
 const w=sheets.Weekly_Report; w.showGridLines=false; w.getRange('A1:F1').merge(); w.getRange('A1').values=[['Weekly Executive Report']]; w.getRange('A1:F1').format.fill=navy; w.getRange('A1:F1').format.font={name:'Arial',size:18,bold:true,color:white}; w.getRange('A1:F1').format.rowHeight=40;
-w.getRange('A2:F2').merge(); w.getRange('A2').values=[['Demo Chapter / Student Organization • Week ending 2026-06-30']]; w.getRange('A2:F2').format.font={color:gray,italic:true};
+w.getRange('A2:F2').merge(); w.getRange('A2').values=[['Alpha Omega Chapter • Week ending 2026-06-30']]; w.getRange('A2:F2').format.font={color:gray,italic:true};
 const reportRows=[
  ['ATTENDANCE SUMMARY','','','','',''],['Required-event attendance rate','76.2%','','','',''],['Recorded check-ins / records','16 / 21','','','',''],
  ['MEMBERS NEEDING FOLLOW-UP','','','','',''],['M004','Taylor Morgan','66.7%','Review attendance record','',''],['M005','Riley Nguyen','66.7%','Check in about recent absence','',''],['M006','Casey Brown','33.3%','Offer support and confirm future availability','',''],
@@ -143,7 +143,7 @@ w.getRange('A1:A26').format.columnWidth=24; w.getRange('B1:B26').format.columnWi
 d.getRange('F4:F9').values=[['Formula examples'],['Active members: COUNTIF'],['Associate/new members: COUNTIFS'],['Attendance: COUNTIFS / total records'],['Dues: SUM'],['Upcoming: COUNTIFS + TODAY']];
 d.getRange('F4:F9').format.fill=lightBlue; d.getRange('F4:F4').format.font={bold:true,color:navy}; d.getRange('F1:F30').format.columnWidth=31;
 
-const output=await SpreadsheetFile.exportXlsx(wb); await output.save(`${outDir}/ChapterOps_Lite_MVP.xlsx`);
+const output=await SpreadsheetFile.exportXlsx(wb); await output.save(`${outDir}/AO_Command_MVP.xlsx`);
 const inspect=await wb.inspect({kind:'table',range:'Dashboard!A1:F20',include:'values,formulas',tableMaxRows:20,tableMaxCols:6,maxChars:7000}); console.log(inspect.ndjson);
 const errors=await wb.inspect({kind:'match',searchTerm:'#REF!|#DIV/0!|#VALUE!|#NAME\\?|#N/A',options:{useRegex:true,maxResults:100},summary:'formula errors',maxChars:3000}); console.log(errors.ndjson);
 for (const n of names) { const blob=await wb.render({sheetName:n,autoCrop:'all',scale:0.8,format:'png'}); await fs.writeFile(`${outDir}/preview_${n}.png`,new Uint8Array(await blob.arrayBuffer())); }

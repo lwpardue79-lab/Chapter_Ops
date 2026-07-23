@@ -1,4 +1,4 @@
--- Persist ChapterOps member CSV imports into the existing workspace_state source of truth.
+-- Persist AO Command member CSV imports into the existing workspace_state source of truth.
 -- The current app stores chapter records in workspace_state.data JSON, so this RPC
 -- atomically merges imported member rows into data.members and returns an import summary.
 

@@ -1,4 +1,4 @@
--- Harden ChapterOps role-based access control and RLS around the current
+-- Harden AO Command role-based access control and RLS around the current
 -- workspace_state JSON source of truth. This migration preserves all data.
 
 create schema if not exists app_private;

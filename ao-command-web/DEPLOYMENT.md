@@ -3,7 +3,7 @@
 ## Production URL
 
 ```text
-https://chapterops-lite.vercel.app/
+AO Command production deployment
 ```
 
 ## Deploy to Vercel
@@ -28,7 +28,7 @@ dist/
 
 ## Supabase connection
 
-The app is configured for the existing ChapterOps Supabase project:
+The app is configured for the existing AO Command Supabase project:
 
 ```text
 https://hjgyigdxlempsfqgjttt.supabase.co
@@ -38,9 +38,9 @@ It uses Supabase Auth email/password accounts, personal-email access requests, A
 
 After deploy, confirm Supabase Authentication URL settings include:
 
-- Site URL: `https://chapterops-lite.vercel.app`
+- Site URL: AO Command production deployment URL
 - Redirect URLs:
-  - `https://chapterops-lite.vercel.app`
+  - AO Command production deployment URL
   - `http://localhost:4173`
 
 ## Next production hardening step

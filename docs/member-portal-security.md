@@ -1,7 +1,7 @@
 # Member Portal Security
 
 Date: 2026-07-17  
-App: https://chapterops-lite.vercel.app/
+App: AO Command production deployment
 
 ## Purpose
 

@@ -1,4 +1,4 @@
--- Normalize Executive Team roles and initialize KPI workspace arrays in ChapterOps.
+-- Normalize Leadership roles and initialize KPI workspace arrays in AO Command.
 -- The current production app stores operational records in workspace_state.data JSON.
 -- This RPC preserves member/finance/attendance/task data, canonicalizes VPMD/Brotherhood
 -- into one VPMD role, keeps Recruitment separate, marks active officer assignments as

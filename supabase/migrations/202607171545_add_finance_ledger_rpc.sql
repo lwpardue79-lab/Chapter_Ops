@@ -1,4 +1,4 @@
--- Add ChapterOps finance ledger persistence to the existing workspace_state JSON model.
+-- Add AO Command finance ledger persistence to the existing workspace_state JSON model.
 -- Current app data is stored in workspace_state.data, with members as the canonical roster.
 -- This RPC upserts one current finance account per active member and optionally appends
 -- historical finance transactions without creating duplicate member records.

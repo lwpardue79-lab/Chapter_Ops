@@ -1,4 +1,4 @@
--- Fix ChapterOps Lite first-time setup persistence.
+-- Fix AO Command first-time setup persistence.
 -- Creates a secure RPC used by the static frontend to save chapter setup as one transaction.
 
 create schema if not exists app_private;

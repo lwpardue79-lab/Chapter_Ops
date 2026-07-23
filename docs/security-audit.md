@@ -1,11 +1,11 @@
-# ChapterOps RBAC and Supabase RLS Audit
+# AO Command RBAC and Supabase RLS Audit
 
 Date: 2026-07-17  
-App: https://chapterops-lite.vercel.app/
+App: AO Command production deployment
 
 ## Summary
 
-ChapterOps currently stores chapter operational records in `public.workspace_state.data` as one JSON workspace document. That design is simple and has worked for rapid deployment, but it means row-level security cannot expose only one member's dues, attendance, or profile fields from that same row. If a user can read `workspace_state`, they can receive the whole chapter workspace.
+AO Command currently stores chapter operational records in `public.workspace_state.data` as one JSON workspace document. That design is simple and has worked for rapid deployment, but it means row-level security cannot expose only one member's dues, attendance, or profile fields from that same row. If a user can read `workspace_state`, they can receive the whole chapter workspace.
 
 The security fix in this pass hardens access around that reality:
 
@@ -91,12 +91,12 @@ Active Member:
 
 - Member Portal only in this version.
 - The full workspace is not loaded.
-- Executive Dashboard, Members, Executive Team, Recruitment, Attendance admin, Finance, KPI Reports, Tasks admin, Reports, Settings, imports, exports, backups, and workspace clearing are hidden and guarded.
+- Command Center, Member Directory, Leadership, Recruitment Pipeline, Events & Attendance admin, Financial Operations, KPI Reports, Action Center admin, Reports & Analytics, Administration, imports, exports, backups, and workspace clearing are hidden and guarded.
 
 Treasurer / Assistant Treasurer:
 
-- Dashboard
-- Members
+- Command Center
+- Member Directory
 - Executive Team
 - Attendance
 - Finance
@@ -106,8 +106,8 @@ Treasurer / Assistant Treasurer:
 
 President:
 
-- Dashboard
-- Members
+- Command Center
+- Member Directory
 - Executive Team
 - Recruitment
 - Attendance
@@ -119,8 +119,8 @@ President:
 
 VPMD:
 
-- Dashboard
-- Members
+- Command Center
+- Member Directory
 - Executive Team
 - Attendance
 - KPI Reports
@@ -130,8 +130,8 @@ VPMD:
 
 Recruitment:
 
-- Dashboard
-- Members list
+- Command Center
+- Member Directory
 - Executive Team
 - Recruitment
 - Attendance

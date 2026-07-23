@@ -1,24 +1,24 @@
-# ChapterOps Lite — MVP Setup Guide
+# AO Command — MVP Setup Guide
 
 This package contains an import-ready workbook and its Google Apps Script. It is designed for fraternities, sororities, clubs, and student organizations, with neutral, professional operations language.
 
 ## 1. Create the Google Sheet
 
-1. Upload `ChapterOps_Lite_MVP.xlsx` to Google Drive.
+1. Upload `AO_Command_MVP.xlsx` to Google Drive.
 2. Open it with Google Sheets, then choose **File → Save as Google Sheets**.
 3. Confirm these tabs exist: Members, Events, Attendance, Dues, Reimbursements, Dashboard, Settings, and Weekly_Report.
-4. Replace the sample records, but keep the header names unchanged.
+4. Replace the starter records, but keep the header names unchanged.
 
 ## 2. Install Apps Script
 
 1. In the Google Sheet, choose **Extensions → Apps Script**.
-2. Replace the starter code with the contents of `ChapterOps_Lite.gs`.
-3. Save the project as **ChapterOps Lite**.
+2. Replace the starter code with the contents of `AO_Command.gs`.
+3. Save the project as **AO Command**.
 4. Run `onOpen` once and approve the requested Google permissions.
-5. Reload the spreadsheet. The **ChapterOps** menu will appear.
-6. Run **ChapterOps → Run Trial Setup Check** before entering real data.
+5. Reload the spreadsheet. The **AO Command** menu will appear.
+6. Run **AO Command → Run Trial Setup Check** before entering real data.
 
-The first setup check, email, or form creation may ask for Google authorization. Test with your own email before using the executive list.
+The first setup check, email, or form creation may ask for Google authorization. Verify with your own email before using the executive list.
 
 ## 3. Configure Settings
 
@@ -48,13 +48,13 @@ The workbook already includes formulas. Google Sheets equivalents include:
 - Approved unpaid: `=COUNTIFS(Reimbursements!I2:I200,"Approved",Reimbursements!J2:J200,"Unpaid")`
 - Upcoming events in seven days: `=COUNTIFS(Events!C2:C200,">="&TODAY(),Events!C2:C200,"<="&TODAY()+7)`
 
-Use **ChapterOps → Refresh Dashboard** as the authoritative refresh. It calculates required-event attendance by joining Attendance.event_id to Events.event_id and only includes events marked required.
+Use **AO Command → Refresh Command Center** as the authoritative refresh. It calculates required-event attendance by joining Attendance.event_id to Events.event_id and only includes events marked required.
 
 ## 5. Attendance form and QR check-in
 
 ### Fastest setup
 
-1. Choose **ChapterOps → Create Attendance Form Link**.
+1. Choose **AO Command → Create Attendance Form Link**.
 2. The script creates a Google Form with event ID, member ID, and attendance status, and links its responses to the spreadsheet.
 3. The script also installs a spreadsheet form-submit trigger that maps each new response into Attendance.
 4. Open the returned form link and submit a test response.
@@ -73,7 +73,7 @@ Copy the form link into a trusted QR-code generator, download the QR image, and 
 1. Run **Trial Setup Check** if this is a new copy or a new officer is using it.
 2. Update Events and Attendance.
 3. Update dues payments and reimbursement decisions.
-4. Choose **Refresh Dashboard**.
+4. Choose **Refresh Command Center**.
 5. Choose **Generate Weekly Exec Report** and review the output.
 6. Resolve any sensitive notes before sending.
 7. Choose **Email Exec Report**.
@@ -94,11 +94,11 @@ Follow-ups should be private, supportive, and based on accurate records. Limit s
 ## 8. Sellable deployment checklist
 
 - Duplicate a clean master copy for each organization.
-- Replace all sample data and example email addresses.
+- Replace all starter data and example email addresses.
 - Protect Settings, Dashboard formulas, and report formatting.
 - Grant edit access only to designated officers; give others form-only access.
 - Add your support contact and a short privacy statement.
-- Test menu functions with a non-production copy.
+- Verify menu functions with a non-production copy.
 - Document data retention and officer-transition procedures.
 
 ## 9. Future web-app path

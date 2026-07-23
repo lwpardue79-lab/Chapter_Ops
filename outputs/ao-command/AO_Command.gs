@@ -1,4 +1,4 @@
-/** ChapterOps Lite — Google Apps Script for the companion workbook. */
+/** AO Command — Google Apps Script for the companion workbook. */
 const CO = {
   sheets: { members:'Members', events:'Events', attendance:'Attendance', dues:'Dues', reimbursements:'Reimbursements', dashboard:'Dashboard', settings:'Settings', report:'Weekly_Report' },
   dashboardStartRow: 5,
@@ -6,11 +6,11 @@ const CO = {
 };
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu('ChapterOps')
+  SpreadsheetApp.getUi().createMenu('AO Command')
     .addItem('Run Trial Setup Check','runTrialSetupCheck')
     .addSeparator()
     .addItem('Generate Weekly Exec Report','generateWeeklyExecReport')
-    .addItem('Refresh Dashboard','refreshDashboard')
+    .addItem('Refresh Command Center','refreshDashboard')
     .addItem('Email Exec Report','emailExecReport')
     .addSeparator()
     .addItem('Create Attendance Form Link','createAttendanceFormLink')
@@ -45,8 +45,8 @@ function runTrialSetupCheck() {
   const formUrl=PropertiesService.getDocumentProperties().getProperty('attendance_form_url');
   const msg=issues.length
     ? 'Setup check found items to fix:\n\n'+issues.join('\n')
-    : 'Setup check passed.\n\nActive members: '+activeMembers+'\nEvents loaded: '+eventCount+'\nAttendance form: '+(formUrl||'not created yet')+'\n\nNext: run Refresh Dashboard, then Generate Weekly Exec Report.';
-  SpreadsheetApp.getUi().alert('ChapterOps Lite setup check', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+    : 'Setup check passed.\n\nActive members: '+activeMembers+'\nEvents loaded: '+eventCount+'\nAttendance form: '+(formUrl||'not created yet')+'\n\nNext: run Refresh Command Center, then Generate Weekly Exec Report.';
+  SpreadsheetApp.getUi().alert('AO Command setup check', msg, SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function getData_(sheetName) {
@@ -118,7 +118,7 @@ function refreshDashboard() {
   sh.getRange(CO.followUpStartRow,1,Math.max(sh.getMaxRows()-CO.followUpStartRow+1,1),4).clearContent();
   const rows=membersUnderAttendanceThreshold().map(x=>[x.member.member_id,x.member.first_name+' '+x.member.last_name,x.rate,'Follow up privately']);
   if(rows.length) { sh.getRange(CO.followUpStartRow,1,rows.length,4).setValues(rows); sh.getRange(CO.followUpStartRow,3,rows.length,1).setNumberFormat('0.0%'); }
-  SpreadsheetApp.getActive().toast('Dashboard refreshed.','ChapterOps Lite',4);
+  SpreadsheetApp.getActive().toast('Dashboard refreshed.','AO Command',4);
 }
 
 function generateWeeklyExecReport() {
@@ -141,7 +141,7 @@ function generateWeeklyExecReport() {
   sh.getRange(4,1,rows.length,6).setValues(rows).setWrap(true).setVerticalAlignment('top');
   rows.forEach((r,i)=>{ if(String(r[0]).match(/^[A-Z][A-Z ]+$/)) sh.getRange(i+4,1,1,6).setBackground('#17324D').setFontColor('#FFFFFF').setFontWeight('bold'); });
   sh.setColumnWidths(1,6,145); sh.setColumnWidth(2,220); sh.setColumnWidth(4,230); sh.setFrozenRows(2); sh.setHiddenGridlines(true);
-  SpreadsheetApp.getActive().toast('Weekly report generated.','ChapterOps Lite',4);
+  SpreadsheetApp.getActive().toast('Weekly report generated.','AO Command',4);
 }
 
 function emailExecReport() {
@@ -149,9 +149,9 @@ function emailExecReport() {
   const settings=settings_(), recipients=String(settings.exec_email_list||'').split(',').map(x=>x.trim()).filter(Boolean);
   if(!recipients.length) throw new Error('Add exec_email_list in Settings.');
   const sh=SpreadsheetApp.getActive().getSheetByName(CO.sheets.report), values=sh.getDataRange().getDisplayValues();
-  const html='<div style="font-family:Arial,sans-serif"><h2>'+escapeHtml_(settings.chapter_name||'ChapterOps Lite')+' Weekly Executive Report</h2><table style="border-collapse:collapse">'+values.map((r,i)=>'<tr>'+r.map(c=>'<td style="border:1px solid #dbe3ec;padding:7px;'+(i===0?'background:#17324D;color:white;font-weight:bold':'')+'">'+escapeHtml_(c)+'</td>').join('')+'</tr>').join('')+'</table></div>';
-  MailApp.sendEmail({to:recipients.join(','),subject:(settings.chapter_name||'Chapter / Organization')+' — Weekly Executive Report',htmlBody:html,name:settings.report_sender_name||'ChapterOps Lite'});
-  SpreadsheetApp.getActive().toast('Report emailed to '+recipients.length+' recipient(s).','ChapterOps Lite',5);
+  const html='<div style="font-family:Arial,sans-serif"><h2>'+escapeHtml_(settings.chapter_name||'AO Command')+' Weekly Executive Report</h2><table style="border-collapse:collapse">'+values.map((r,i)=>'<tr>'+r.map(c=>'<td style="border:1px solid #dbe3ec;padding:7px;'+(i===0?'background:#17324D;color:white;font-weight:bold':'')+'">'+escapeHtml_(c)+'</td>').join('')+'</tr>').join('')+'</table></div>';
+  MailApp.sendEmail({to:recipients.join(','),subject:(settings.chapter_name||'Chapter / Organization')+' — Weekly Executive Report',htmlBody:html,name:settings.report_sender_name||'AO Command'});
+  SpreadsheetApp.getActive().toast('Report emailed to '+recipients.length+' recipient(s).','AO Command',5);
 }
 
 function createAttendanceFormLink() {

@@ -1,4 +1,4 @@
--- Data-safe one-time normalization for existing ChapterOps workspace_state rows.
+-- Data-safe one-time normalization for existing AO Command workspace_state rows.
 -- This updates existing leadership JSON records in-place without deleting members or history.
 
 do $$

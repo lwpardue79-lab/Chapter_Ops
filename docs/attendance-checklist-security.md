@@ -1,6 +1,6 @@
 # Attendance checklist security
 
-ChapterOps now uses a Secretary-managed roster checklist for normal chapter and event attendance.
+AO Command now uses a Secretary-managed roster checklist for normal chapter and event attendance.
 
 ## Weekly chapter workflow
 

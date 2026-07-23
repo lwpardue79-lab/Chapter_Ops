@@ -1,25 +1,27 @@
-# Alpha Omega Chapter Operations
+# AO Command
 
-ChapterOps Lite is configured for the **Alpha Omega Chapter of Pi Kappa Alpha at Kansas State University**.
+AO Command is configured for the **Alpha Omega Chapter of Pi Kappa Alpha at Kansas State University**.
+
+**Alpha Omega Chapter Management Platform**
+
+**The operating system for Alpha Omega.**
 
 This build is for real setup and real data entry by chapter leadership and the Treasurer. It does not seed member, dues, PNM, event, finance, or attendance records.
 
 ## Live app
 
-```text
-https://chapterops-lite.vercel.app/
-```
+The production deployment is managed in Vercel for AO Command.
 
 ## Core modules
 
 - First-time setup for chapter name, school, term, academic year, default dues amount, due dates, roles, statuses, event types, committees, permissions, and privacy notice.
 - Member roster with add/edit/archive/delete, profiles, search, filters, duplicate detection, CSV import, and CSV export.
-- Treasurer / dues tracker with charges, payments, payment status, payment plans, waived entries, due dates, payment methods, Treasurer notes, member balances, and exports.
-- Treasurer dashboard with billed, collected, outstanding, unpaid, partially paid, paid, past due, plans, and quick actions.
-- Events and attendance with event creation, required/optional tracking, member/PNM attendance, excused/unexcused statuses, and attendance export.
-- Tasks and officer follow-ups.
-- Officers and committees.
-- Reports for roster, dues, outstanding balances, payment history, attendance, event participation, officer tasks, and executive summary.
+- Financial Operations with charges, payments, payment status, payment plans, waived entries, due dates, payment methods, Treasurer notes, member balances, and exports.
+- Treasurer summary with billed, collected, outstanding, unpaid, partially paid, paid, past due, plans, and quick actions.
+- Events & Attendance with event creation, required/optional tracking, member/PNM attendance, excused/unexcused statuses, and attendance export.
+- Action Center for officer follow-ups.
+- Leadership.
+- Reports & Analytics for roster, dues, outstanding balances, payment history, attendance, event participation, officer tasks, and executive summary.
 - Activity log for important changes.
 - Active Member Portal with member-only Home, My Profile, My Balance, My Payments, My Attendance, My Tasks, Chapter Calendar, and Announcements.
 
@@ -58,7 +60,7 @@ npm run dev
 Or serve this folder:
 
 ```bash
-python3 -m http.server 4173 --directory chapterops-web
+python3 -m http.server 4173 --directory ao-command-web
 ```
 
 ## Deployment
@@ -69,4 +71,4 @@ Deploy from the repository root:
 vercel --prod
 ```
 
-The root build copies `chapterops-web/` into `dist/` for Vercel.
+The root build copies `ao-command-web/` into `dist/` for Vercel.

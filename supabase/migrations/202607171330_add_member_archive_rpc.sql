@@ -1,4 +1,4 @@
--- Persist ChapterOps member deletion as a safe archive in workspace_state.
+-- Persist AO Command member deletion as a safe archive in workspace_state.
 -- Canonical roster records are stored in workspace_state.data.members.
 -- This function archives the member and active officer assignments while preserving
 -- dues, attendance, payment, task, and historical records that reference the member id.

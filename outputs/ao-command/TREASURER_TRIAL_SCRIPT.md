@@ -1,4 +1,4 @@
-# ChapterOps Lite — Treasurer Trial Script
+# AO Command — Treasurer Trial Script
 
 Use this as a loose script when walking through the product. Keep it conversational.
 
@@ -10,7 +10,7 @@ Use this as a loose script when walking through the product. Keep it conversatio
 
 “For the treasurer, the big value is that dues and reimbursements are connected to the rest of chapter operations. You can see total owed, collected, outstanding balance, overdue balances, pending reimbursements, and approved unpaid reimbursements without rebuilding a report every week.”
 
-## Demo path
+## Walkthrough path
 
 1. Start on Dashboard.
 2. Show total active members.
@@ -18,8 +18,8 @@ Use this as a loose script when walking through the product. Keep it conversatio
 4. Open Dues and explain each row.
 5. Open Reimbursements and explain approval and paid status.
 6. Open Events and Attendance.
-7. Run **ChapterOps → Refresh Dashboard**.
-8. Run **ChapterOps → Generate Weekly Exec Report**.
+7. Run **AO Command → Refresh Command Center**.
+8. Run **AO Command → Generate Weekly Exec Report**.
 9. Show the report sections.
 10. Explain that **Email Exec Report** sends the same summary to the executive email list.
 

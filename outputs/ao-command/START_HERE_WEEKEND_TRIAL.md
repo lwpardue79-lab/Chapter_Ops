@@ -1,12 +1,12 @@
-# ChapterOps Lite — Start Here for This Weekend
+# AO Command — Start Here for This Weekend
 
 Use this file as your trial-run command center. The goal is not to make the system perfect on day one. The goal is to prove that you and the treasurer can manage members, events, attendance, dues, reimbursements, and an executive report from one clean operating file.
 
 ## What to have ready before you meet
 
-- A Google Drive folder named `ChapterOps Lite Trial`.
-- A Google Sheet created from `outputs/chapterops-lite/ChapterOps_Lite_MVP.xlsx`.
-- The Apps Script installed from `outputs/chapterops-lite/ChapterOps_Lite.gs`.
+- A Google Drive folder named `AO Command Trial`.
+- A Google Sheet created from `outputs/ao-command/AO_Command_MVP.xlsx`.
+- The Apps Script installed from `outputs/ao-command/AO_Command.gs`.
 - Your treasurer’s email added to `Settings.exec_email_list`.
 - 5–10 real members entered into Members for the trial.
 - 1 real upcoming event entered into Events.
@@ -19,7 +19,7 @@ Use this file as your trial-run command center. The goal is not to make the syst
 
 Say:
 
-“This is ChapterOps Lite. It replaces scattered spreadsheets and manual reminders with one operating dashboard. It is not a social ranking tool. It is just for operations: roster, events, attendance, dues, reimbursements, and weekly executive reporting.”
+“This is AO Command. It replaces scattered spreadsheets and manual reminders with one operating dashboard. It is not a social ranking tool. It is just for operations: roster, events, attendance, dues, reimbursements, and weekly executive reporting.”
 
 Show these tabs:
 
@@ -49,9 +49,9 @@ In Dues:
 
 ### 12–20 minutes: Attendance demo
 
-1. Go to **ChapterOps → Run Trial Setup Check**.
+1. Go to **AO Command → Run Trial Setup Check**.
 2. Fix anything it flags.
-3. Go to **ChapterOps → Create Attendance Form Link**.
+3. Go to **AO Command → Create Attendance Form Link**.
 4. Submit one test check-in together.
 5. Confirm the new row appears in Attendance.
 6. Convert the form link into a QR code if you are going to test live check-in.
@@ -60,11 +60,11 @@ Important: if someone submits twice for the same event, the script updates their
 
 ### 20–27 minutes: Dashboard and report
 
-1. Go to **ChapterOps → Refresh Dashboard**.
+1. Go to **AO Command → Refresh Command Center**.
 2. Review the key metrics.
-3. Go to **ChapterOps → Generate Weekly Exec Report**.
+3. Go to **AO Command → Generate Weekly Exec Report**.
 4. Read the action items out loud.
-5. If everything looks right, use **ChapterOps → Email Exec Report**.
+5. If everything looks right, use **AO Command → Email Exec Report**.
 
 For the first test, send only to yourself and the treasurer.
 
@@ -91,14 +91,14 @@ Avoid anything that sounds like personal comparison, public callouts, status gam
 
 - [ ] Import workbook into Google Sheets.
 - [ ] Install Apps Script.
-- [ ] Reload sheet and confirm the ChapterOps menu appears.
+- [ ] Reload sheet and confirm the AO Command menu appears.
 - [ ] Run Trial Setup Check.
-- [ ] Replace sample Settings.
-- [ ] Add a small real member sample.
+- [ ] Replace Settings.
+- [ ] Add a small roster subset.
 - [ ] Add one real event.
 - [ ] Create attendance form link.
 - [ ] Submit test attendance.
-- [ ] Refresh Dashboard.
+- [ ] Refresh Command Center.
 - [ ] Generate Weekly Exec Report.
 - [ ] Email report to yourself and treasurer.
 - [ ] Write down any confusing parts immediately after the trial.
