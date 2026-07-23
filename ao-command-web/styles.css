@@ -617,13 +617,118 @@ button:disabled {
 }
 .app-footer strong { color: var(--brand); }
 
+.event-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+.event-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 12px 30px rgba(15, 37, 58, 0.06);
+}
+.event-card.cancelled { opacity: .72; }
+.event-card-main {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.event-card-main h4 {
+  margin: 0;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+.event-card-main p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.event-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.event-meta-grid span {
+  padding: 9px;
+  border-radius: 12px;
+  background: #f8fbff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.event-meta-grid strong {
+  display: block;
+  color: var(--ink);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.calendar-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 0 8px;
+}
+.calendar-chip {
+  min-width: 185px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f8fbff;
+  padding: 12px;
+  color: inherit;
+}
+.calendar-chip strong { color: var(--brand); }
+.calendar-chip span { font-weight: 900; }
+.calendar-chip em { color: var(--muted); font-style: normal; font-size: 12px; }
+.compact-lists {
+  margin-top: 14px;
+}
+.compact-stack h4 {
+  margin: 0 0 8px;
+}
+.segmented-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.segmented-controls button {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  padding: 7px 10px;
+  font-weight: 850;
+}
+.segmented-controls button.active {
+  color: white;
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.attendance-row {
+  gap: 10px;
+}
+
 @media (max-width: 1080px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { position: relative; height: auto; }
   .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .topbar, .hero, .panel-head, .page-header { align-items: flex-start; flex-direction: column; }
   .kpi-grid, .mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .quick-grid, .priority-grid, .readiness-list, .role-focus-grid, .trust-grid, .report-packet-grid, .treasurer-workflow-grid, .three-col, .two-col, .card-grid, .settings-grid { grid-template-columns: 1fr; }
+  .quick-grid, .priority-grid, .readiness-list, .role-focus-grid, .trust-grid, .report-packet-grid, .treasurer-workflow-grid, .three-col, .two-col, .card-grid, .settings-grid, .event-card-grid { grid-template-columns: 1fr; }
   .form-grid, .form-grid.compact { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
@@ -647,6 +752,9 @@ button:disabled {
   .attendance-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; width: 100%; }
   .attendance-buttons .small { width: 100%; min-height: 44px; }
   .attendance-note { min-width: 0; }
+  .event-meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .segmented-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .segmented-controls button { width: 100%; min-height: 44px; }
   table, thead, tbody, tr, th, td { display: block; min-width: 0; }
   thead { display: none; }
   .finance-table-wrap { max-height: none; border: 0; }

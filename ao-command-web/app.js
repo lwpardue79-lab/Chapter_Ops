@@ -18,6 +18,7 @@ const setupDebug = (...args) => console.info("[AO Command setup]", ...args);
 const viewNames = {
   dashboard: "Command Center",
   alerts: "Command Alerts",
+  brotherhood: "Brotherhood Events",
   members: "Member Directory",
   leadership: "Leadership",
   recruitment: "Recruitment Pipeline",
@@ -33,16 +34,16 @@ const viewNames = {
 const permissionRoles = ["Admin", "President", "Treasurer", "Assistant Treasurer", "Secretary", "VPMD", "Recruitment", "Exec Board", "Committee Chair", "Active Member", "Read-only Advisor"];
 const roleRules = {
   Admin: ["all"],
-  President: ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.archive", "members.import", "members.export", "officers.view", "officers.manage", "recruitment.view", "recruitment.manage", "attendance.view", "attendance.manage", "finance.summary.view", "finance.member_balances.view", "reports.executive.view", "reports.finance.view", "reports.export", "kpi.view", "kpi.manage_all", "tasks.view_all", "tasks.manage", "settings.view", "backup.create"],
-  Treasurer: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  "Assistant Treasurer": ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  Secretary: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.import", "members.export", "attendance.view", "attendance.manage", "reports.attendance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  VPMD: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.update", "members.export", "attendance.view", "reports.member_development.view", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  Recruitment: ["workspace.full.read", "dashboard.role.view", "members.list.view", "recruitment.view", "recruitment.manage", "attendance.view", "reports.recruitment.view", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  "Exec Board": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.export", "officers.view", "recruitment.view", "attendance.view", "reports.executive.view", "kpi.view", "kpi.submit_own", "tasks.view_all"],
-  "Committee Chair": ["workspace.full.read", "dashboard.role.view", "members.list.view", "attendance.view", "attendance.manage", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  "Active Member": ["member.portal.view", "members.self.view", "finance.self.view", "attendance.self.view", "tasks.view_own"],
-  "Read-only Advisor": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "officers.view", "attendance.view", "reports.executive.view", "reports.finance.view", "kpi.view"]
+  President: ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.archive", "members.import", "members.export", "officers.view", "officers.manage", "events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "recruitment.view", "recruitment.manage", "attendance.view", "attendance.manage", "finance.summary.view", "finance.member_balances.view", "reports.executive.view", "reports.finance.view", "reports.export", "kpi.view", "kpi.manage_all", "tasks.view_all", "tasks.manage", "settings.view", "backup.create"],
+  Treasurer: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "events.view", "brotherhood.events.admin.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  "Assistant Treasurer": ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "events.view", "brotherhood.events.admin.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  Secretary: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.import", "members.export", "events.view", "brotherhood.events.admin.view", "attendance.view", "attendance.manage", "reports.attendance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  VPMD: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.update", "members.export", "events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "attendance.view", "reports.member_development.view", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  Recruitment: ["workspace.full.read", "dashboard.role.view", "members.list.view", "events.view", "brotherhood.events.admin.view", "recruitment.view", "recruitment.manage", "attendance.view", "reports.recruitment.view", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  "Exec Board": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.export", "officers.view", "events.view", "brotherhood.events.admin.view", "recruitment.view", "attendance.view", "reports.executive.view", "kpi.view", "kpi.submit_own", "tasks.view_all"],
+  "Committee Chair": ["workspace.full.read", "dashboard.role.view", "members.list.view", "events.view", "brotherhood.events.admin.view", "attendance.view", "attendance.manage", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  "Active Member": ["member.portal.view", "members.self.view", "finance.self.view", "attendance.self.view", "events.member.view", "events.rsvp", "tasks.view_own"],
+  "Read-only Advisor": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "officers.view", "events.view", "brotherhood.events.admin.view", "attendance.view", "reports.executive.view", "reports.finance.view", "kpi.view"]
 };
 const legacyPermissionMap = {
   view_all: "members.list.view",
@@ -59,6 +60,7 @@ const legacyPermissionMap = {
 const navigationItems = [
   { view: "dashboard", label: "Command Center", permission: "dashboard.role.view" },
   { view: "alerts", label: "Command Alerts", permission: "dashboard.role.view" },
+  { view: "brotherhood", label: "Brotherhood Events", permission: "events.view" },
   { view: "members", label: "Member Directory", permission: "members.list.view" },
   { view: "leadership", label: "Leadership", permission: "officers.view" },
   { view: "recruitment", label: "Recruitment Pipeline", permission: "recruitment.view" },
@@ -112,6 +114,17 @@ let financeSort = { key: "lastName", dir: "asc" };
 let activePortalTab = "home";
 let memberPortal = { loading: false, error: "", data: null, saving: false };
 let attendanceManager = { loading: false, error: "", data: null, selectedSessionId: "", search: "", filter: "all", saving: new Set(), saveStatus: "" };
+let brotherhood = {
+  loading: false,
+  error: "",
+  saving: false,
+  events: [],
+  privateNotes: [],
+  rsvps: [],
+  attendance: [],
+  recaps: [],
+  filter: { mode: "upcoming", q: "", category: "All", status: "All", required: "All" }
+};
 
 function resolvedRole() {
   if (cloud.profile?.approval_status === "approved") return displayRoleForProfile(cloud.profile, cloud.currentMembership || {});
@@ -406,10 +419,12 @@ async function bootstrapUser() {
     if (isFullWorkspaceAllowed()) {
       await loadCloudWorkspace();
       if (can("attendance.view")) await loadAttendanceManager();
+      if (canAny(["events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "all"])) await loadBrotherhoodEvents();
     }
     else {
       resetSensitiveClientState(state.settings.currentRole);
       await loadMemberPortal();
+      if (canAny(["events.member.view", "events.rsvp"])) await loadBrotherhoodEvents();
     }
     if (can("all")) await loadProfilesForAdmin();
   }
@@ -422,6 +437,7 @@ function resetSensitiveClientState(role = "Active Member") {
   importState = { importing: false, result: null, error: "", rows: [], target: "", validation: null };
   memberPortal = { loading: false, error: "", data: null, saving: false };
   attendanceManager = { loading: false, error: "", data: null, selectedSessionId: "", search: "", filter: "all", saving: new Set(), saveStatus: "" };
+  brotherhood = { loading: false, error: "", saving: false, events: [], privateNotes: [], rsvps: [], attendance: [], recaps: [], filter: { mode: "upcoming", q: "", category: "All", status: "All", required: "All" } };
   historyStack = [];
   try {
     localStorage.removeItem(storeKey);
@@ -771,6 +787,261 @@ function metrics() {
   };
 }
 
+const brotherhoodCategories = ["Brotherhood", "Member Development", "Chapter Meeting", "Service", "Philanthropy", "Social", "Academic", "Alumni", "Recruitment", "Other"];
+const brotherhoodStatuses = ["Draft", "Published", "Completed", "Cancelled", "Archived"];
+const rsvpStatuses = ["Attending", "Not attending", "Maybe"];
+const brotherhoodAttendanceStatuses = ["Present", "Absent", "Excused", "Late", "Left early"];
+const attendanceMethods = ["Officer manual check-in", "Rotating QR code", "Short numeric check-in code", "Member roster check-off"];
+
+function canManageBrotherhoodEvents() {
+  return can("brotherhood.events.manage") || can("all");
+}
+
+function canViewBrotherhoodAdmin() {
+  return canManageBrotherhoodEvents() || can("brotherhood.events.admin.view") || can("all");
+}
+
+function memberIdForCurrentUser() {
+  return cloud.currentMembership?.member_id || "";
+}
+
+function toLocalDatetimeInput(value = "") {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 16);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function toIsoFromLocal(value = "") {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function formatDateTime(value = "") {
+  if (!value) return "Date TBA";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function dateOnly(value = "") {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value).slice(0, 10) : date.toISOString().slice(0, 10);
+}
+
+function eventPrivateNotes(eventId) {
+  return brotherhood.privateNotes.find((note) => note.eventId === eventId)?.privateOfficerNotes || "";
+}
+
+function eventRsvps(eventId) {
+  return brotherhood.rsvps.filter((rsvp) => rsvp.eventId === eventId);
+}
+
+function eventAttendance(eventId) {
+  return brotherhood.attendance.filter((row) => row.eventId === eventId);
+}
+
+function eventRecap(eventId) {
+  return brotherhood.recaps.find((recap) => recap.eventId === eventId) || null;
+}
+
+function myRsvpForEvent(eventId) {
+  const memberId = memberIdForCurrentUser();
+  return brotherhood.rsvps.find((rsvp) => rsvp.eventId === eventId && rsvp.memberId === memberId) || null;
+}
+
+function myAttendanceForEvent(eventId) {
+  const memberId = memberIdForCurrentUser();
+  return brotherhood.attendance.find((row) => row.eventId === eventId && row.memberId === memberId) || null;
+}
+
+function dbEventToClient(row = {}) {
+  return {
+    id: row.id,
+    chapterId: row.chapter_id,
+    title: row.title || "",
+    description: row.description || "",
+    category: row.category || "Brotherhood",
+    startsAt: row.starts_at || "",
+    endsAt: row.ends_at || "",
+    location: row.location || "",
+    locationInstructions: row.location_instructions || "",
+    organizerMemberId: row.organizer_member_id || "",
+    assignedOfficerMemberId: row.assigned_officer_member_id || "",
+    required: Boolean(row.required),
+    audience: row.audience || "All Active Members",
+    rsvpDeadline: row.rsvp_deadline || "",
+    capacity: row.capacity ?? "",
+    waitlistEnabled: Boolean(row.waitlist_enabled),
+    allowMaybe: row.allow_maybe !== false,
+    excuseRequiredForRequired: row.excuse_required_for_required !== false,
+    attendanceMethod: row.attendance_method || "Member roster check-off",
+    attendanceOpensAt: row.attendance_opens_at || "",
+    attendanceClosesAt: row.attendance_closes_at || "",
+    participationPointValue: Number(row.participation_point_value || 0),
+    coverImageUrl: row.cover_image_url || "",
+    memberVisibleNotes: row.member_visible_notes || "",
+    status: row.status || "Draft",
+    createdBy: row.created_by || "",
+    updatedBy: row.updated_by || "",
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || "",
+    publishedAt: row.published_at || ""
+  };
+}
+
+function dbRsvpToClient(row = {}) {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    chapterId: row.chapter_id,
+    memberId: row.member_id,
+    userId: row.user_id || "",
+    status: row.status || "",
+    excuseNote: row.excuse_note || "",
+    waitlistStatus: row.waitlist_status || "confirmed",
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || ""
+  };
+}
+
+function dbAttendanceToClient(row = {}) {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    chapterId: row.chapter_id,
+    memberId: row.member_id,
+    status: row.status || "",
+    checkInAt: row.check_in_at || "",
+    checkInMethod: row.check_in_method || "",
+    suspicious: Boolean(row.suspicious),
+    correctionReason: row.correction_reason || "",
+    previousStatus: row.previous_status || "",
+    markedBy: row.marked_by || "",
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || ""
+  };
+}
+
+function dbRecapToClient(row = {}) {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    attendanceCount: Number(row.attendance_count || 0),
+    rsvpCount: Number(row.rsvp_count || 0),
+    estimatedCostCents: Number(row.estimated_cost_cents || 0),
+    actualCostCents: Number(row.actual_cost_cents || 0),
+    wentWell: row.went_well || "",
+    improvements: row.improvements || "",
+    memberFeedback: row.member_feedback || "",
+    recommendedChanges: row.recommended_changes || "",
+    repeatEvent: row.repeat_event || "Not sure",
+    filesUrl: row.files_url || "",
+    privateOfficerNotes: row.private_officer_notes || "",
+    completedBy: row.completed_by || "",
+    completedAt: row.completed_at || "",
+    updatedAt: row.updated_at || ""
+  };
+}
+
+async function loadBrotherhoodEvents() {
+  if (!cloud.client || !cloud.user) return;
+  brotherhood.loading = true;
+  brotherhood.error = "";
+  render();
+  try {
+    const organizationId = await ensureCloudWorkspace();
+    const [eventsResult, rsvpsResult, attendanceResult, recapsResult, notesResult] = await Promise.all([
+      cloud.client.from("brotherhood_events").select("*").eq("chapter_id", organizationId).order("starts_at", { ascending: true }),
+      cloud.client.from("brotherhood_event_rsvps").select("*").eq("chapter_id", organizationId).order("updated_at", { ascending: false }),
+      cloud.client.from("brotherhood_event_attendance").select("*").eq("chapter_id", organizationId).order("updated_at", { ascending: false }),
+      cloud.client.from("brotherhood_event_recaps").select("*").eq("chapter_id", organizationId).order("updated_at", { ascending: false }),
+      canViewBrotherhoodAdmin()
+        ? cloud.client.from("brotherhood_event_private_notes").select("*").eq("chapter_id", organizationId)
+        : Promise.resolve({ data: [], error: null })
+    ]);
+    [eventsResult, rsvpsResult, attendanceResult, recapsResult, notesResult].forEach((result) => {
+      if (result.error) throw result.error;
+    });
+    brotherhood.events = (eventsResult.data || []).map(dbEventToClient);
+    brotherhood.rsvps = (rsvpsResult.data || []).map(dbRsvpToClient);
+    brotherhood.attendance = (attendanceResult.data || []).map(dbAttendanceToClient);
+    brotherhood.recaps = (recapsResult.data || []).map(dbRecapToClient);
+    brotherhood.privateNotes = (notesResult.data || []).map((row) => ({
+      id: row.id,
+      eventId: row.event_id,
+      privateOfficerNotes: row.private_officer_notes || ""
+    }));
+    brotherhood.loading = false;
+  } catch (err) {
+    logSupabaseError("load brotherhood events failed", err);
+    brotherhood.loading = false;
+    brotherhood.error = formatSupabaseError(err, "Brotherhood events could not be loaded.");
+  }
+}
+
+function filteredBrotherhoodEvents() {
+  const filter = brotherhood.filter || {};
+  const now = new Date();
+  const q = String(filter.q || "").toLowerCase();
+  return [...brotherhood.events].filter((event) => {
+    const starts = event.startsAt ? new Date(event.startsAt) : null;
+    if (filter.mode === "upcoming" && starts && starts < now && !["Draft", "Cancelled"].includes(event.status)) return false;
+    if (filter.mode === "past" && (!starts || starts >= now)) return false;
+    if (filter.mode === "drafts" && event.status !== "Draft") return false;
+    if (filter.mode === "cancelled" && event.status !== "Cancelled") return false;
+    if (filter.category && filter.category !== "All" && event.category !== filter.category) return false;
+    if (filter.status && filter.status !== "All" && event.status !== filter.status) return false;
+    if (filter.required === "Required" && !event.required) return false;
+    if (filter.required === "Optional" && event.required) return false;
+    if (q && ![event.title, event.description, event.location, event.category, event.status, memberName(event.assignedOfficerMemberId), memberName(event.organizerMemberId)].join(" ").toLowerCase().includes(q)) return false;
+    return event.status !== "Archived" || filter.mode === "archived";
+  }).sort((a, b) => String(a.startsAt || "").localeCompare(String(b.startsAt || "")));
+}
+
+function brotherhoodStats() {
+  const events = brotherhood.events.filter((e) => e.status !== "Archived");
+  const semesterStart = state.settings.term?.toLowerCase().includes("spring") ? `${new Date().getFullYear()}-01-01` : `${new Date().getFullYear()}-08-01`;
+  const semesterEvents = events.filter((event) => !event.startsAt || dateOnly(event.startsAt) >= semesterStart);
+  const upcoming = events.filter((e) => ["Published", "Draft"].includes(e.status) && e.startsAt && new Date(e.startsAt) >= new Date());
+  const published = events.filter((e) => e.status === "Published" || e.status === "Completed");
+  const rsvpPossible = published.reduce((sum, event) => sum + activeMembers().length, 0);
+  const rsvpCount = published.reduce((sum, event) => sum + eventRsvps(event.id).length, 0);
+  const attendancePossible = published.reduce((sum, event) => sum + activeMembers().length, 0);
+  const attendedCount = brotherhood.attendance.filter((row) => ["Present", "Late", "Left early"].includes(row.status)).length;
+  const requiredEvents = published.filter((e) => e.required);
+  const requiredPossible = requiredEvents.length * activeMembers().length;
+  const requiredAttended = brotherhood.attendance.filter((row) => requiredEvents.some((event) => event.id === row.eventId) && ["Present", "Late", "Left early", "Excused"].includes(row.status)).length;
+  const points = brotherhood.attendance.reduce((sum, row) => {
+    if (!["Present", "Late", "Left early"].includes(row.status)) return sum;
+    const event = brotherhood.events.find((e) => e.id === row.eventId);
+    return sum + Number(event?.participationPointValue || 0);
+  }, 0);
+  const missedByMember = new Map();
+  brotherhood.attendance.filter((row) => ["Absent", "Late"].includes(row.status)).forEach((row) => missedByMember.set(row.memberId, (missedByMember.get(row.memberId) || 0) + 1));
+  const participationByMember = new Map();
+  brotherhood.attendance.filter((row) => ["Present", "Late", "Left early"].includes(row.status)).forEach((row) => participationByMember.set(row.memberId, (participationByMember.get(row.memberId) || 0) + 1));
+  const topParticipation = [...participationByMember.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const missedMultiple = [...missedByMember.entries()].filter(([, count]) => count >= 2).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  return {
+    eventsHeld: semesterEvents.filter((e) => e.status === "Completed" || (e.startsAt && new Date(e.startsAt) < new Date())).length,
+    upcoming: upcoming.length,
+    drafts: events.filter((e) => e.status === "Draft").length,
+    averageRsvpRate: pct(rsvpCount, rsvpPossible),
+    averageAttendanceRate: pct(attendedCount, attendancePossible),
+    requiredAttendanceRate: pct(requiredAttended, requiredPossible),
+    optionalParticipation: pct(brotherhood.attendance.filter((row) => published.some((event) => event.id === row.eventId && !event.required) && ["Present", "Late", "Left early"].includes(row.status)).length, published.filter((e) => !e.required).length * activeMembers().length),
+    totalPoints: points,
+    attendanceNeedsReview: brotherhood.attendance.filter((row) => row.suspicious || row.status === "Late").length,
+    recapsDue: events.filter((event) => event.status === "Completed" && !eventRecap(event.id)).length,
+    topParticipation,
+    missedMultiple
+  };
+}
+
 function normalizeTitle(title = "") {
   return String(title || "")
     .toLowerCase()
@@ -1008,6 +1279,7 @@ function render() {
   root.innerHTML = ({
     dashboard: renderDashboard,
     alerts: renderCommandAlertsPage,
+    brotherhood: renderBrotherhoodEvents,
     members: () => renderCollection("members"),
     recruitment: () => renderCollection("pnms"),
     events: () => renderCollection("events"),
@@ -1117,7 +1389,7 @@ function renderPortalHome(data) {
   const finance = data.finance || {};
   const attendance = data.attendanceSummary || {};
   const tasks = data.tasks || [];
-  const events = data.events || [];
+  const events = memberVisiblePortalEvents(data.events || []);
   const announcements = data.announcements || [];
   return `<section class="panel">
     <div class="panel-head"><div><h3>Welcome, ${safe(profile.preferredName || profile.firstName || "Member")}</h3><p class="muted">Your personal chapter overview.</p></div></div>
@@ -1229,8 +1501,26 @@ function renderPortalTasks(tasks) {
 }
 
 function renderPortalCalendar(events) {
-  if (!events.length) return `<section class="panel empty-state"><h3>No upcoming events</h3><p>There are no member-visible events scheduled.</p></section>`;
-  return `<section class="panel"><div class="panel-head"><div><h3>Chapter Calendar</h3><p class="muted">Events shared with active members.</p></div></div>${portalTable(["Event", "Date", "Time", "Location", "Type", "Requirement", "Description"], events.map((e) => [e.name || e.title || "", e.date || "", [e.time, e.endTime].filter(Boolean).join(" – "), e.location || "", e.type || "", e.required || "", e.description || ""]))}</section>`;
+  const rows = memberVisiblePortalEvents(events);
+  if (!rows.length) return `<section class="panel empty-state"><h3>No upcoming events</h3><p>There are no member-visible events scheduled.</p></section>`;
+  return `<section class="panel"><div class="panel-head"><div><h3>Chapter Calendar</h3><p class="muted">Events shared with active members.</p></div><button class="ghost" data-brotherhood-refresh>Refresh</button></div>${portalTable(["Event", "Date", "Time", "Location", "Type", "Requirement", "RSVP", "Attendance", "Actions"], rows.map((e) => [e.name || e.title || "", e.date || dateOnly(e.startsAt), e.time || formatDateTime(e.startsAt), e.location || "", e.type || e.category || "", e.required === true || e.required === "Required" ? "Required" : "Optional", e.rsvpStatus || "", e.attendanceStatus || "", e.id && e.status === "Published" ? `<button class="primary small" data-brotherhood-rsvp="${safe(e.id)}">RSVP</button>` : ""]), true)}</section>`;
+}
+
+function memberVisiblePortalEvents(existingEvents = []) {
+  const legacy = (existingEvents || []).map((e) => ({ ...e, rsvpStatus: "", attendanceStatus: "" }));
+  const currentMemberId = memberIdForCurrentUser();
+  const fromBrotherhood = brotherhood.events
+    .filter((event) => event.status === "Published" && (!event.startsAt || new Date(event.startsAt) >= new Date()))
+    .map((event) => ({
+      ...event,
+      name: event.title,
+      date: dateOnly(event.startsAt),
+      time: formatDateTime(event.startsAt),
+      type: event.category,
+      rsvpStatus: brotherhood.rsvps.find((rsvp) => rsvp.eventId === event.id && rsvp.memberId === currentMemberId)?.status || "Not submitted",
+      attendanceStatus: brotherhood.attendance.find((row) => row.eventId === event.id && row.memberId === currentMemberId)?.status || "Not recorded"
+    }));
+  return [...fromBrotherhood, ...legacy].sort((a, b) => String(a.startsAt || a.date || "").localeCompare(String(b.startsAt || b.date || "")));
 }
 
 function renderPortalAnnouncements(announcements) {
@@ -1261,6 +1551,8 @@ function renderHeaderAction(label, style = "ghost", target = "") {
   if (target.startsWith("export:")) return `<button class="${safe(style)}" data-export="${safe(target.split(":")[1])}">${safe(label)}</button>`;
   if (target === "print") return `<button class="${safe(style)}" data-print>${safe(label)}</button>`;
   if (target === "portal-refresh") return `<button class="${safe(style)}" data-refresh-member-portal>${safe(label)}</button>`;
+  if (target === "brotherhood-create") return `<button class="${safe(style)}" data-brotherhood-create>${safe(label)}</button>`;
+  if (target === "brotherhood-refresh") return `<button class="${safe(style)}" data-brotherhood-refresh>${safe(label)}</button>`;
   if (target === "attendance-start") return `<button class="${safe(style)}" data-attendance-start>${safe(label)}</button>`;
   if (target === "attendance-create") return `<button class="${safe(style)}" data-attendance-create>${safe(label)}</button>`;
   if (target === "attendance-refresh") return `<button class="${safe(style)}" data-attendance-refresh>${safe(label)}</button>`;
@@ -1389,7 +1681,7 @@ function roleScopedHeaderActions(role) {
   if (role === "Recruitment") return [["Add PNM", "primary", "pnms:add"], ["Export Recruitment Packet", "ghost", "export:recruitment-packet"]];
   if (["Treasurer", "Assistant Treasurer"].includes(role)) return [["Record Payment", "primary", "finance"], ["Export Treasurer Packet", "ghost", "export:treasurer-packet"]];
   if (role === "Secretary") return [["Start Attendance", "primary", "attendance-start"], ["Export Secretary Packet", "ghost", "export:secretary-packet"]];
-  if (role === "VPMD") return [["Create Task", "primary", "tasks:add"], ["Export VPMD Packet", "ghost", "export:vpmd-packet"]];
+  if (role === "VPMD") return [["Create Brotherhood Event", "primary", "brotherhood-create"], ["Create Task", "ghost", "tasks:add"], ["Export VPMD Packet", "ghost", "export:vpmd-packet"]];
   return [["Open Alerts", "primary", "alerts"]];
 }
 
@@ -1413,7 +1705,8 @@ function renderRoleDataPanel(role, m) {
     return `<section class="panel"><div class="panel-head"><div><h3>Attendance data</h3><p class="muted">Your attendance workspace and roster context.</p></div></div><div class="mini-grid">${mini("Active members", m.members, "members")}${mini("Attendance rate", m.attendanceRate, "events")}${mini("Missing attendance", m.missingAttendance, "events")}${mini("Upcoming events", m.events, "events")}</div></section>`;
   }
   if (role === "VPMD") {
-    return `<section class="panel"><div class="panel-head"><div><h3>Member development data</h3><p class="muted">Member engagement, brotherhood programming, and follow-up work.</p></div></div><div class="mini-grid">${mini("Active members", m.members, "members")}${mini("New members", m.newMembers, "members")}${mini("Attendance rate", m.attendanceRate, "events")}${mini("Open tasks", m.tasks, "tasks")}</div></section>`;
+    const stats = brotherhoodStats();
+    return `<section class="panel"><div class="panel-head"><div><h3>VPMD Brotherhood workspace</h3><p class="muted">Brotherhood programming, member engagement, RSVPs, attendance, and recaps.</p></div><button class="primary" data-brotherhood-create>Create Brotherhood Event</button></div><div class="mini-grid">${mini("Upcoming brotherhood events", stats.upcoming, "brotherhood")}${mini("Draft events", stats.drafts, "brotherhood")}${mini("Average RSVP rate", stats.averageRsvpRate, "brotherhood")}${mini("Average attendance", stats.averageAttendanceRate, "brotherhood")}${mini("Attendance needing review", stats.attendanceNeedsReview, "brotherhood")}${mini("Recaps awaiting completion", stats.recapsDue, "brotherhood")}${mini("Open membership-development tasks", openTasks().filter((t) => normalizeTitle(t.assignedPerson || t.category || t.title || "").includes("vpmd") || normalizeTitle(t.assignedPerson || t.category || t.title || "").includes("brotherhood")).length, "tasks")}${mini("Member-development goals", state.kpiDefinitions.filter((k) => displayPosition(k.position || "").includes("VPMD")).length, "kpis")}</div></section>`;
   }
   return "";
 }
@@ -1424,13 +1717,14 @@ function renderRoleQuickActions(role) {
     Treasurer: [["Open Financial Operations", "finance"], ["Export Treasurer Packet", "export:treasurer-packet"], ["Open Tasks", "tasks"]],
     "Assistant Treasurer": [["Open Financial Operations", "finance"], ["Export Treasurer Packet", "export:treasurer-packet"], ["Open Tasks", "tasks"]],
     Secretary: [["Start Attendance", "attendance-start"], ["Open Events & Attendance", "events"], ["Export Secretary Packet", "export:secretary-packet"]],
-    VPMD: [["Open Member Directory", "members"], ["Open Action Center", "tasks"], ["Export VPMD Packet", "export:vpmd-packet"]]
+    VPMD: [["Create Brotherhood Event", "brotherhood:create"], ["Open Brotherhood Events", "brotherhood"], ["Open Action Center", "tasks"], ["Export VPMD Packet", "export:vpmd-packet"]]
   }[role] || [];
   if (!actions.length) return "";
   return `<section class="panel"><div class="panel-head"><h3>Quick actions</h3></div><div class="quick-grid role-quick-grid">${actions.map(([label, target]) => renderRoleQuickAction(label, target)).join("")}</div></section>`;
 }
 
 function renderRoleQuickAction(label, target) {
+  if (target === "brotherhood:create") return `<button class="action-tile" data-brotherhood-create>${safe(label)}</button>`;
   if (target.endsWith(":add")) return `<button class="action-tile" data-add="${safe(target.split(":")[0])}">${safe(label)}</button>`;
   if (target.startsWith("export:")) return `<button class="action-tile" data-export="${safe(target.split(":")[1])}">${safe(label)}</button>`;
   if (target === "attendance-start") return `<button class="action-tile" data-attendance-start>${safe(label)}</button>`;
@@ -1458,6 +1752,13 @@ function commandAlertRows() {
   state.events.filter((event) => !event.archived && event.date && event.date <= todayIso() && !state.attendance.some((a) => a.eventId === event.id)).forEach((event) => {
     add("Attendance", `${event.name || event.eventName || "Event"} is missing attendance`, event.type || event.eventType || event.event_category || "", "events", "Secretary", event.date, "Needs record", "High");
   });
+  brotherhood.events.filter((event) => event.status === "Published" && event.rsvpDeadline && new Date(event.rsvpDeadline) <= new Date()).forEach((event) => {
+    const missing = activeMembers().filter((member) => !brotherhood.rsvps.some((rsvp) => rsvp.eventId === event.id && rsvp.memberId === member.id)).length;
+    if (missing) add("Brotherhood", `${missing} missing RSVP${missing === 1 ? "" : "s"} for ${event.title}`, "RSVP deadline has passed.", "brotherhood", "VPMD", dateOnly(event.rsvpDeadline), "Needs follow-up", "High");
+  });
+  brotherhood.events.filter((event) => event.status === "Published" && event.endsAt && new Date(event.endsAt) < new Date() && !eventRecap(event.id)).forEach((event) => {
+    add("Brotherhood", `${event.title} recap is due`, "Complete the event recap for officer transition records.", "brotherhood", "VPMD", dateOnly(event.endsAt), "Recap due", "Medium");
+  });
   kpiReportsForMeeting(state.kpiMeetings[0]?.id || "").filter((r) => r.status !== "Submitted").forEach((report) => {
     add("KPI Reports", `${displayPosition(report.position)} report not submitted`, report.overallUpdate || "", "kpis", (report.officerMemberIds || [report.officerMemberId]).filter(Boolean).map(memberName).join(", "), "", report.status || "Draft", "Medium");
   });
@@ -1483,6 +1784,470 @@ function renderCommandAlertsPage() {
     <div class="status-strip">${categories.map((cat) => `<button class="${category === cat ? "active" : ""}" data-alert-category="${safe(cat)}">${safe(cat)}<strong>${cat === "All" ? rows.length : rows.filter((row) => row.category === cat).length}</strong></button>`).join("")}</div>
     ${filtered.length ? `<div class="alert-list">${filtered.map(renderAlertRow).join("")}</div>` : `<div class="empty-state"><h3>No command alerts</h3><p>Alerts will appear here when dues, attendance, tasks, recruitment, or KPI reports need attention.</p></div>`}
   </section>`;
+}
+
+function renderBrotherhoodEvents() {
+  if (brotherhood.loading) return `${renderPageHeader("Brotherhood Events", "Plan, publish, and review member-development events.", [])}<section class="panel empty-state"><h3>Loading events</h3><p>Getting the latest Brotherhood Events from Supabase…</p></section>`;
+  const admin = canViewBrotherhoodAdmin();
+  const manage = canManageBrotherhoodEvents();
+  const rows = filteredBrotherhoodEvents();
+  const stats = brotherhoodStats();
+  const actions = [["Refresh", "ghost", "brotherhood-refresh"]];
+  if (manage) actions.unshift(["Create Brotherhood Event", "primary", "brotherhood-create"]);
+  return `${renderPageHeader("Brotherhood Events", "Plan brotherhood, member-development, service, social, academic, and alumni events.", actions)}
+    ${brotherhood.error ? `<section class="notice error-notice"><h4>Brotherhood Events unavailable</h4><p>${safe(brotherhood.error)}</p><button class="ghost" data-brotherhood-refresh>Retry</button></section>` : ""}
+    <section class="panel">
+      <div class="panel-head">
+        <div><h3>Brotherhood Engagement</h3><p class="muted">Operational indicators for VPMD review.</p></div>
+        ${manage ? `<button class="ghost small" data-brotherhood-settings>Targets</button>` : ""}
+      </div>
+      <div class="mini-grid">
+        ${mini("Events held this semester", stats.eventsHeld)}
+        ${mini("Upcoming events", stats.upcoming)}
+        ${mini("Draft events", stats.drafts)}
+        ${mini("Average RSVP rate", stats.averageRsvpRate)}
+        ${mini("Average attendance rate", stats.averageAttendanceRate)}
+        ${mini("Required-event attendance", stats.requiredAttendanceRate)}
+        ${mini("Optional participation", stats.optionalParticipation)}
+        ${mini("Total participation points", stats.totalPoints)}
+        ${mini("Attendance needing review", stats.attendanceNeedsReview)}
+        ${mini("Recaps awaiting completion", stats.recapsDue)}
+      </div>
+      <div class="two-col compact-lists">
+        ${brotherhoodMemberList("Highest participation", stats.topParticipation, "Events attended")}
+        ${brotherhoodMemberList("Missed multiple events", stats.missedMultiple, "Missed/late records")}
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head">
+        <div><h3>Event workspace</h3><p class="muted">${rows.length} event${rows.length === 1 ? "" : "s"} shown.</p></div>
+        <div class="button-row"><input class="search" id="brotherhoodSearch" placeholder="Search events" value="${safe(brotherhood.filter.q || "")}" /></div>
+      </div>
+      ${renderBrotherhoodFilters()}
+      ${renderBrotherhoodCalendar(rows)}
+      ${rows.length ? `<div class="event-card-grid">${rows.map((event) => renderBrotherhoodEventCard(event, admin, manage)).join("")}</div>` : `<div class="empty-state"><h3>No Brotherhood Events found</h3><p>${manage ? "Create a Brotherhood Event or adjust your filters." : "Published member-visible events will appear here."}</p>${manage ? `<button class="primary" data-brotherhood-create>Create Brotherhood Event</button>` : ""}</div>`}
+    </section>`;
+}
+
+function brotherhoodMemberList(title, rows, label) {
+  return `<div class="stack-list compact-stack"><h4>${safe(title)}</h4>${rows.length ? rows.map(([memberId, count]) => `<button class="stack-item" data-open="members" data-id="${safe(memberId)}">${safe(memberName(memberId) || memberId)}<span>${safe(label)}: ${safe(count)}</span></button>`).join("") : emptySmall("No records yet.")}</div>`;
+}
+
+function renderBrotherhoodFilters() {
+  const f = brotherhood.filter || {};
+  const modes = [["upcoming", "Upcoming"], ["past", "Past"], ["drafts", "Drafts"], ["cancelled", "Cancelled"], ["archived", "Archived"], ["all", "All"]];
+  return `<div class="status-strip">
+    ${modes.map(([value, label]) => `<button class="${f.mode === value ? "active" : ""}" data-brotherhood-filter="mode:${safe(value)}">${safe(label)}</button>`).join("")}
+    <select data-brotherhood-filter-select="category"><option>All</option>${brotherhoodCategories.map((cat) => `<option ${f.category === cat ? "selected" : ""}>${safe(cat)}</option>`).join("")}</select>
+    <select data-brotherhood-filter-select="status"><option>All</option>${brotherhoodStatuses.map((status) => `<option ${f.status === status ? "selected" : ""}>${safe(status)}</option>`).join("")}</select>
+    <select data-brotherhood-filter-select="required"><option>All</option><option ${f.required === "Required" ? "selected" : ""}>Required</option><option ${f.required === "Optional" ? "selected" : ""}>Optional</option></select>
+  </div>`;
+}
+
+function renderBrotherhoodCalendar(rows) {
+  const upcoming = rows.filter((event) => event.startsAt && new Date(event.startsAt) >= new Date()).slice(0, 6);
+  return `<div class="calendar-strip" aria-label="Upcoming Brotherhood Events">${upcoming.length ? upcoming.map((event) => {
+    const d = new Date(event.startsAt);
+    return `<button class="calendar-chip" data-brotherhood-open="${safe(event.id)}"><strong>${Number.isNaN(d.getTime()) ? "TBA" : d.toLocaleDateString([], { month: "short", day: "numeric" })}</strong><span>${safe(event.title)}</span><em>${safe(event.location || "Location TBA")}</em></button>`;
+  }).join("") : `<p class="muted">No upcoming events in this view.</p>`}</div>`;
+}
+
+function renderBrotherhoodEventCard(event, admin, manage) {
+  const rsvps = eventRsvps(event.id);
+  const attendance = eventAttendance(event.id);
+  const myRsvp = myRsvpForEvent(event.id);
+  const myAttendance = myAttendanceForEvent(event.id);
+  const attending = rsvps.filter((r) => r.status === "Attending" && r.waitlistStatus !== "waitlisted").length;
+  const waitlisted = rsvps.filter((r) => r.waitlistStatus === "waitlisted").length;
+  const present = attendance.filter((a) => ["Present", "Late", "Left early"].includes(a.status)).length;
+  return `<article class="event-card ${event.status.toLowerCase()}">
+    <button class="event-card-main" data-brotherhood-open="${safe(event.id)}">
+      <span class="status-pill">${safe(event.status)}</span>
+      <h4>${safe(event.title)}</h4>
+      <p>${safe(formatDateTime(event.startsAt))}${event.endsAt ? ` – ${safe(formatDateTime(event.endsAt))}` : ""}</p>
+      <p>${safe(event.location || "Location TBA")} · ${safe(event.category)} · ${event.required ? "Required" : "Optional"}</p>
+      <p>${safe(event.memberVisibleNotes || event.description || "No additional member notes.")}</p>
+    </button>
+    <div class="event-meta-grid">
+      <span><strong>RSVP</strong>${admin ? `${attending} attending${waitlisted ? ` · ${waitlisted} waitlisted` : ""}` : safe(myRsvp?.status || "Not submitted")}</span>
+      <span><strong>Attendance</strong>${admin ? `${present} present` : safe(myAttendance?.status || "Not recorded")}</span>
+      <span><strong>Owner</strong>${safe(memberName(event.assignedOfficerMemberId) || memberName(event.organizerMemberId) || "VPMD")}</span>
+      <span><strong>Points</strong>${safe(event.participationPointValue || 0)}</span>
+    </div>
+    <div class="button-row">
+      <button class="ghost small" data-brotherhood-open="${safe(event.id)}">Details</button>
+      ${!admin && event.status === "Published" ? `<button class="primary small" data-brotherhood-rsvp="${safe(event.id)}">RSVP</button>` : ""}
+      ${manage ? `<button class="ghost small" data-brotherhood-edit="${safe(event.id)}">Edit</button><button class="ghost small" data-brotherhood-duplicate="${safe(event.id)}">Duplicate</button><button class="ghost small" data-brotherhood-attendance="${safe(event.id)}">Attendance</button><button class="ghost small" data-brotherhood-recap="${safe(event.id)}">Recap</button><button class="danger small" data-brotherhood-delete="${safe(event.id)}">Delete</button>` : ""}
+    </div>
+  </article>`;
+}
+
+function openBrotherhoodEventForm(id = "", duplicate = false) {
+  if (!canManageBrotherhoodEvents()) return toast("VPMD, President, or Admin access required.");
+  const existing = id ? brotherhood.events.find((event) => event.id === id) : null;
+  const source = duplicate && existing ? { ...existing, id: "", title: `Copy of ${existing.title}`, status: "Draft" } : existing;
+  const privateNotes = existing && !duplicate ? eventPrivateNotes(existing.id) : "";
+  openModal(`<h3>${source?.id ? "Edit Brotherhood Event" : "Create Brotherhood Event"}</h3>
+    <form id="brotherhoodEventForm" class="form-grid">
+      <label class="wide">Event title<input name="title" required value="${safe(source?.title || "")}" /></label>
+      <label class="wide">Event description<textarea name="description" required>${safe(source?.description || "")}</textarea></label>
+      <label>Category<select name="category">${brotherhoodCategories.map((cat) => `<option ${source?.category === cat ? "selected" : ""}>${safe(cat)}</option>`).join("")}</select></label>
+      <label>Status<select name="status">${brotherhoodStatuses.filter((s) => s !== "Archived").map((status) => `<option ${source?.status === status ? "selected" : ""}>${safe(status)}</option>`).join("")}</select></label>
+      <label>Start date/time<input name="startsAt" type="datetime-local" required value="${safe(toLocalDatetimeInput(source?.startsAt))}" /></label>
+      <label>End date/time<input name="endsAt" type="datetime-local" required value="${safe(toLocalDatetimeInput(source?.endsAt))}" /></label>
+      <label>Location<input name="location" required value="${safe(source?.location || "")}" /></label>
+      <label>Location instructions<input name="locationInstructions" value="${safe(source?.locationInstructions || "")}" /></label>
+      <label>Organizer<select name="organizerMemberId">${selectOptions("members").map(([v,t]) => `<option value="${safe(v)}" ${source?.organizerMemberId === v ? "selected" : ""}>${safe(t)}</option>`).join("")}</select></label>
+      <label>Assigned officer<select name="assignedOfficerMemberId">${selectOptions("members").map(([v,t]) => `<option value="${safe(v)}" ${source?.assignedOfficerMemberId === v ? "selected" : ""}>${safe(t)}</option>`).join("")}</select></label>
+      <label>Required<select name="required"><option value="true" ${source?.required ? "selected" : ""}>Required</option><option value="false" ${!source?.required ? "selected" : ""}>Optional</option></select></label>
+      <label>Audience<input name="audience" value="${safe(source?.audience || "All Active Members")}" /></label>
+      <label>RSVP deadline<input name="rsvpDeadline" type="datetime-local" value="${safe(toLocalDatetimeInput(source?.rsvpDeadline))}" /></label>
+      <label>Maximum attendance<input name="capacity" type="number" min="0" value="${safe(source?.capacity || "")}" /></label>
+      <label>Waitlist<select name="waitlistEnabled"><option value="false" ${!source?.waitlistEnabled ? "selected" : ""}>Disabled</option><option value="true" ${source?.waitlistEnabled ? "selected" : ""}>Enabled</option></select></label>
+      <label>Maybe RSVP<select name="allowMaybe"><option value="true" ${source?.allowMaybe !== false ? "selected" : ""}>Allowed</option><option value="false" ${source?.allowMaybe === false ? "selected" : ""}>Not allowed</option></select></label>
+      <label>Attendance method<select name="attendanceMethod">${attendanceMethods.map((method) => `<option ${source?.attendanceMethod === method ? "selected" : ""}>${safe(method)}</option>`).join("")}</select></label>
+      <label>Attendance opens<input name="attendanceOpensAt" type="datetime-local" value="${safe(toLocalDatetimeInput(source?.attendanceOpensAt))}" /></label>
+      <label>Attendance closes<input name="attendanceClosesAt" type="datetime-local" value="${safe(toLocalDatetimeInput(source?.attendanceClosesAt))}" /></label>
+      <label>Participation-point value<input name="participationPointValue" type="number" step="0.25" min="0" value="${safe(source?.participationPointValue || 0)}" /></label>
+      <label>Cover image URL<input name="coverImageUrl" value="${safe(source?.coverImageUrl || "")}" /></label>
+      <label class="wide">Member-visible notes<textarea name="memberVisibleNotes">${safe(source?.memberVisibleNotes || "")}</textarea></label>
+      <label class="wide">Private officer notes<textarea name="privateOfficerNotes">${safe(privateNotes)}</textarea></label>
+      <div class="wide button-row">
+        <button class="primary" type="submit" data-save-intent="save">${brotherhood.saving ? "Saving…" : "Save"}</button>
+        <button class="ghost" type="submit" data-save-intent="draft">Save Draft</button>
+        <button class="ghost" type="submit" data-save-intent="publish">Publish</button>
+        <button class="ghost" type="button" data-close-modal>Cancel</button>
+      </div>
+    </form>`);
+  document.querySelectorAll("#brotherhoodEventForm [data-save-intent]").forEach((button) => button.addEventListener("click", () => {
+    document.getElementById("brotherhoodEventForm").dataset.intent = button.dataset.saveIntent;
+  }));
+  document.getElementById("brotherhoodEventForm")?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const intent = ev.currentTarget.dataset.intent || "save";
+    const row = Object.fromEntries(new FormData(ev.currentTarget).entries());
+    await saveBrotherhoodEvent(row, source?.id || "", intent);
+  });
+}
+
+function cleanBrotherhoodEventForm(row, id = "", intent = "save") {
+  const startsAt = toIsoFromLocal(row.startsAt);
+  const endsAt = toIsoFromLocal(row.endsAt);
+  if (!row.title?.trim()) throw new Error("Event title is required.");
+  if (!row.description?.trim()) throw new Error("Event description is required.");
+  if (!startsAt || !endsAt) throw new Error("Start and end date/time are required.");
+  if (new Date(endsAt) <= new Date(startsAt)) throw new Error("End time must be after the start time.");
+  if (!row.location?.trim()) throw new Error("Location is required.");
+  const status = intent === "draft" ? "Draft" : intent === "publish" ? "Published" : row.status || "Draft";
+  if (status === "Published" && !confirm(`Publish "${row.title}" to eligible members?`)) throw new Error("Publish cancelled.");
+  const conflicts = brotherhood.events.filter((event) => event.id !== id && !["Cancelled", "Archived"].includes(event.status) && event.startsAt && event.endsAt && startsAt < event.endsAt && endsAt > event.startsAt);
+  if (conflicts.length && !confirm(`${conflicts.length} scheduling conflict${conflicts.length === 1 ? "" : "s"} found. Save anyway?`)) throw new Error("Save cancelled because of scheduling conflict.");
+  return {
+    title: row.title.trim(),
+    description: row.description.trim(),
+    category: row.category || "Brotherhood",
+    startsAt,
+    endsAt,
+    location: row.location.trim(),
+    locationInstructions: row.locationInstructions || "",
+    organizerMemberId: row.organizerMemberId || null,
+    assignedOfficerMemberId: row.assignedOfficerMemberId || null,
+    required: row.required === "true",
+    audience: row.audience || "All Active Members",
+    rsvpDeadline: toIsoFromLocal(row.rsvpDeadline),
+    capacity: row.capacity === "" ? null : Number(row.capacity),
+    waitlistEnabled: row.waitlistEnabled === "true",
+    allowMaybe: row.allowMaybe !== "false",
+    excuseRequiredForRequired: true,
+    attendanceMethod: row.attendanceMethod || "Member roster check-off",
+    attendanceOpensAt: toIsoFromLocal(row.attendanceOpensAt),
+    attendanceClosesAt: toIsoFromLocal(row.attendanceClosesAt),
+    participationPointValue: Number(row.participationPointValue || 0),
+    coverImageUrl: row.coverImageUrl || "",
+    memberVisibleNotes: row.memberVisibleNotes || "",
+    privateOfficerNotes: row.privateOfficerNotes || "",
+    status
+  };
+}
+
+async function saveBrotherhoodEvent(row, id = "", intent = "save") {
+  if (brotherhood.saving) return;
+  let payload;
+  try {
+    payload = cleanBrotherhoodEventForm(row, id, intent);
+  } catch (err) {
+    return toast(err.message);
+  }
+  brotherhood.saving = true;
+  render();
+  try {
+    const { data, error } = await cloud.client.rpc("upsert_brotherhood_event", { p_event_id: id || null, p_event: payload });
+    if (error) throw error;
+    await loadBrotherhoodEvents();
+    brotherhood.saving = false;
+    closeModal();
+    render();
+    toast(payload.status === "Published" ? "Brotherhood Event published." : "Brotherhood Event saved.");
+    const savedId = data?.id || (Array.isArray(data) ? data[0]?.id : "");
+    if (savedId) openBrotherhoodEventDetails(savedId);
+  } catch (err) {
+    logSupabaseError("save brotherhood event failed", err);
+    brotherhood.saving = false;
+    render();
+    toast(formatSupabaseError(err, "Brotherhood Event could not be saved."));
+  }
+}
+
+async function duplicateBrotherhoodEvent(id) {
+  openBrotherhoodEventForm(id, true);
+}
+
+function openBrotherhoodEventDetails(id) {
+  const event = brotherhood.events.find((row) => row.id === id);
+  if (!event) return toast("Event not found.");
+  const admin = canViewBrotherhoodAdmin();
+  const manage = canManageBrotherhoodEvents();
+  const rsvps = eventRsvps(id);
+  const attendance = eventAttendance(id);
+  const recap = eventRecap(id);
+  openModal(`<h3>${safe(event.title)}</h3>
+    <p class="muted">${safe(formatDateTime(event.startsAt))} – ${safe(formatDateTime(event.endsAt))} · ${safe(event.location || "Location TBA")}</p>
+    <div class="profile-grid">
+      <div><span>Status</span><strong>${safe(event.status)}</strong></div>
+      <div><span>Category</span><strong>${safe(event.category)}</strong></div>
+      <div><span>Requirement</span><strong>${event.required ? "Required" : "Optional"}</strong></div>
+      <div><span>RSVP deadline</span><strong>${safe(formatDateTime(event.rsvpDeadline))}</strong></div>
+      <div><span>Organizer</span><strong>${safe(memberName(event.organizerMemberId) || "—")}</strong></div>
+      <div><span>Assigned officer</span><strong>${safe(memberName(event.assignedOfficerMemberId) || "—")}</strong></div>
+    </div>
+    <p>${safe(event.description)}</p>
+    ${event.memberVisibleNotes ? `<h4>Member notes</h4><p>${safe(event.memberVisibleNotes)}</p>` : ""}
+    ${admin ? `<h4>Admin summary</h4><div class="mini-grid">${mini("RSVPs", rsvps.length)}${mini("Attending", rsvps.filter((r) => r.status === "Attending").length)}${mini("Waitlist", rsvps.filter((r) => r.waitlistStatus === "waitlisted").length)}${mini("Attendance records", attendance.length)}</div>${eventPrivateNotes(id) ? `<h4>Private officer notes</h4><p>${safe(eventPrivateNotes(id))}</p>` : ""}` : ""}
+    ${admin && rsvps.length ? portalTable(["Member", "RSVP", "Waitlist", "Excuse"], rsvps.map((r) => [memberName(r.memberId) || r.memberId, r.status, r.waitlistStatus, r.excuseNote || ""])) : ""}
+    ${recap ? `<h4>Event recap</h4><p><strong>What went well:</strong> ${safe(recap.wentWell || "—")}</p><p><strong>Improve:</strong> ${safe(recap.improvements || "—")}</p>` : ""}
+    <div class="button-row">
+      ${!admin && event.status === "Published" ? `<button class="primary" data-brotherhood-rsvp="${safe(id)}">RSVP</button>` : ""}
+      ${manage ? `<button class="primary" data-brotherhood-edit="${safe(id)}">Edit</button><button class="ghost" data-brotherhood-attendance="${safe(id)}">Attendance</button><button class="ghost" data-brotherhood-recap="${safe(id)}">Recap</button><button class="ghost" data-brotherhood-status="${safe(id)}:Cancelled">Cancel event</button><button class="ghost" data-brotherhood-status="${safe(id)}:Archived">Archive</button><button class="danger" data-brotherhood-delete="${safe(id)}">Delete</button>` : ""}
+      <button class="ghost" data-close-modal>Close</button>
+    </div>`);
+  bindViewActions(document.getElementById("modal"));
+}
+
+function openBrotherhoodRsvpForm(id) {
+  const event = brotherhood.events.find((row) => row.id === id);
+  if (!event) return toast("Event not found.");
+  const current = myRsvpForEvent(id);
+  const options = event.allowMaybe ? rsvpStatuses : rsvpStatuses.filter((s) => s !== "Maybe");
+  openModal(`<h3>RSVP for ${safe(event.title)}</h3>
+    <p class="muted">${safe(formatDateTime(event.startsAt))} · ${safe(event.required ? "Required event" : "Optional event")}</p>
+    <form id="brotherhoodRsvpForm" class="form-grid">
+      <label>RSVP status<select name="status">${options.map((status) => `<option ${current?.status === status ? "selected" : ""}>${safe(status)}</option>`).join("")}</select></label>
+      <label class="wide">Excuse / note<textarea name="excuseNote" placeholder="${event.required ? "If not attending a required event, explain the conflict." : "Optional note"}">${safe(current?.excuseNote || "")}</textarea></label>
+      <div class="wide button-row"><button class="primary">Save RSVP</button><button class="ghost" type="button" data-close-modal>Cancel</button></div>
+    </form>`);
+  document.getElementById("brotherhoodRsvpForm")?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const form = Object.fromEntries(new FormData(ev.currentTarget).entries());
+    if (event.required && form.status === "Not attending" && event.excuseRequiredForRequired && !form.excuseNote?.trim()) return toast("Please add an excuse note for a required event.");
+    await saveBrotherhoodRsvp(id, form.status, form.excuseNote || "");
+  });
+}
+
+async function saveBrotherhoodRsvp(eventId, status, excuseNote = "") {
+  try {
+    const { error } = await cloud.client.rpc("set_brotherhood_rsvp", { p_event_id: eventId, p_status: status, p_excuse_note: excuseNote });
+    if (error) throw error;
+    const event = brotherhood.events.find((row) => row.id === eventId);
+    if (event?.required && status === "Not attending") await createBrotherhoodFollowUpTask(eventId, memberIdForCurrentUser(), "Review required-event RSVP excuse", `Review excuse for ${memberName(memberIdForCurrentUser()) || "member"} on ${event.title}.`, "High");
+    await loadBrotherhoodEvents();
+    await loadMemberPortal();
+    closeModal();
+    render();
+    toast("RSVP saved.");
+  } catch (err) {
+    logSupabaseError("save brotherhood rsvp failed", err);
+    toast(formatSupabaseError(err, "RSVP could not be saved."));
+  }
+}
+
+function openBrotherhoodAttendanceForm(eventId) {
+  if (!canManageBrotherhoodEvents()) return toast("VPMD, President, or Admin access required.");
+  const event = brotherhood.events.find((row) => row.id === eventId);
+  if (!event) return toast("Event not found.");
+  const rows = activeMembers().map((member) => {
+    const record = brotherhood.attendance.find((a) => a.eventId === eventId && a.memberId === member.id) || {};
+    return { member, record };
+  });
+  openModal(`<h3>Attendance · ${safe(event.title)}</h3>
+    <p class="muted">${safe(formatDateTime(event.startsAt))} · ${rows.length} active members</p>
+    <div class="button-row"><button class="ghost small" data-brotherhood-bulk-attendance="${safe(eventId)}:Present">Mark all Present</button><button class="ghost small" data-brotherhood-bulk-attendance="${safe(eventId)}:Absent">Mark all Absent</button></div>
+    <div class="stack-list attendance-stack">${rows.map(({ member, record }) => `<article class="stack-item attendance-row">
+      <strong>${safe(memberName(member.id))}</strong>
+      <span>${safe(member.memberStatus || "Active")} · ${safe(member.officerRole || "")}</span>
+      <div class="segmented-controls">${brotherhoodAttendanceStatuses.map((status) => `<button class="${record.status === status ? "active" : ""}" data-brotherhood-attendance-status="${safe(eventId)}:${safe(member.id)}:${safe(status)}">${safe(status)}</button>`).join("")}</div>
+      <span>${record.checkInAt ? `Marked ${safe(formatDateTime(record.checkInAt))}` : "Unmarked"}</span>
+    </article>`).join("")}</div>
+    <div class="button-row"><button class="ghost" data-close-modal>Close</button></div>`);
+  bindViewActions(document.getElementById("modal"));
+}
+
+async function setBrotherhoodAttendance(eventId, memberId, status, reason = "") {
+  try {
+    const { error } = await cloud.client.rpc("set_brotherhood_attendance", { p_event_id: eventId, p_member_id: memberId, p_status: status, p_reason: reason });
+    if (error) throw error;
+    const event = brotherhood.events.find((row) => row.id === eventId);
+    if (event?.required && status === "Absent") await createBrotherhoodFollowUpTask(eventId, memberId, "Follow up on missed required Brotherhood Event", `${memberName(memberId) || "Member"} was marked absent for ${event.title}.`, "High");
+    await loadBrotherhoodEvents();
+    render();
+    closeModal();
+    openBrotherhoodAttendanceForm(eventId);
+    toast("Attendance saved.");
+  } catch (err) {
+    logSupabaseError("save brotherhood attendance failed", err);
+    toast(formatSupabaseError(err, "Attendance could not be saved."));
+  }
+}
+
+async function createBrotherhoodFollowUpTask(eventId, memberId, title, description, priority = "Medium") {
+  if (!cloud.user || !canAny(["tasks.manage", "brotherhood.events.manage", "all"])) return;
+  const duplicate = state.tasks.some((task) => !task.archived && task.relatedEvent === eventId && task.relatedMember === memberId && normalizeTitle(task.title) === normalizeTitle(title));
+  if (duplicate) return;
+  const task = {
+    id: uid("t"),
+    title,
+    description,
+    assignedPerson: "VPMD",
+    dueDate: todayIso(),
+    priority,
+    status: "Not started",
+    relatedType: "Brotherhood Event",
+    relatedMember: memberId,
+    relatedEvent: eventId,
+    notes: "Created from Brotherhood Events workflow.",
+    archived: false
+  };
+  state.tasks.unshift(task);
+  logActivity("Brotherhood follow-up task created", { type: "tasks", id: task.id, description: title });
+  save();
+  await syncCloudWorkspace(false);
+}
+
+async function bulkBrotherhoodAttendance(eventId, status) {
+  if (!confirm(`Mark all active members ${status}?`)) return;
+  try {
+    for (const member of activeMembers()) {
+      const existing = brotherhood.attendance.find((a) => a.eventId === eventId && a.memberId === member.id);
+      if (!existing?.status) {
+        const { error } = await cloud.client.rpc("set_brotherhood_attendance", { p_event_id: eventId, p_member_id: member.id, p_status: status, p_reason: "Bulk attendance action" });
+        if (error) throw error;
+        const event = brotherhood.events.find((row) => row.id === eventId);
+        if (event?.required && status === "Absent") await createBrotherhoodFollowUpTask(eventId, member.id, "Follow up on missed required Brotherhood Event", `${memberName(member.id) || "Member"} was marked absent for ${event.title}.`, "High");
+      }
+    }
+    await loadBrotherhoodEvents();
+    closeModal();
+    openBrotherhoodAttendanceForm(eventId);
+    toast("Bulk attendance saved.");
+  } catch (err) {
+    logSupabaseError("bulk brotherhood attendance failed", err);
+    toast(formatSupabaseError(err, "Bulk attendance could not be saved."));
+  }
+}
+
+function openBrotherhoodRecapForm(eventId) {
+  if (!canManageBrotherhoodEvents()) return toast("VPMD, President, or Admin access required.");
+  const event = brotherhood.events.find((row) => row.id === eventId);
+  if (!event) return toast("Event not found.");
+  const recap = eventRecap(eventId) || {};
+  openModal(`<h3>Event Recap · ${safe(event.title)}</h3>
+    <form id="brotherhoodRecapForm" class="form-grid">
+      <label>Attendance count<input name="attendanceCount" type="number" value="${safe(recap.attendanceCount || eventAttendance(eventId).filter((a) => ["Present", "Late", "Left early"].includes(a.status)).length)}" /></label>
+      <label>RSVP count<input name="rsvpCount" type="number" value="${safe(recap.rsvpCount || eventRsvps(eventId).length)}" /></label>
+      <label>Estimated cost<input name="estimatedCost" inputmode="decimal" value="${safe((Number(recap.estimatedCostCents || 0) / 100).toFixed(2))}" /></label>
+      <label>Actual cost<input name="actualCost" inputmode="decimal" value="${safe((Number(recap.actualCostCents || 0) / 100).toFixed(2))}" /></label>
+      <label class="wide">What went well<textarea name="wentWell">${safe(recap.wentWell || "")}</textarea></label>
+      <label class="wide">What should improve<textarea name="improvements">${safe(recap.improvements || "")}</textarea></label>
+      <label class="wide">Member feedback<textarea name="memberFeedback">${safe(recap.memberFeedback || "")}</textarea></label>
+      <label class="wide">Recommended changes<textarea name="recommendedChanges">${safe(recap.recommendedChanges || "")}</textarea></label>
+      <label>Repeat event?<select name="repeatEvent">${["Not sure", "Yes", "No"].map((v) => `<option ${recap.repeatEvent === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label>Photos/files URL<input name="filesUrl" value="${safe(recap.filesUrl || "")}" /></label>
+      <label class="wide">Private officer notes<textarea name="privateOfficerNotes">${safe(recap.privateOfficerNotes || "")}</textarea></label>
+      <div class="wide button-row"><button class="primary">Save recap</button><button class="ghost" type="button" data-close-modal>Cancel</button></div>
+    </form>`);
+  document.getElementById("brotherhoodRecapForm")?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    await saveBrotherhoodRecap(eventId, Object.fromEntries(new FormData(ev.currentTarget).entries()));
+  });
+}
+
+async function saveBrotherhoodRecap(eventId, row) {
+  const estimatedCostCents = parseMoneyToCents(row.estimatedCost);
+  const actualCostCents = parseMoneyToCents(row.actualCost);
+  if ([estimatedCostCents, actualCostCents].some(Number.isNaN)) return toast("Enter valid cost amounts.");
+  try {
+    const payload = {
+      attendanceCount: Number(row.attendanceCount || 0),
+      rsvpCount: Number(row.rsvpCount || 0),
+      estimatedCostCents,
+      actualCostCents,
+      wentWell: row.wentWell || "",
+      improvements: row.improvements || "",
+      memberFeedback: row.memberFeedback || "",
+      recommendedChanges: row.recommendedChanges || "",
+      repeatEvent: row.repeatEvent || "Not sure",
+      filesUrl: row.filesUrl || "",
+      privateOfficerNotes: row.privateOfficerNotes || ""
+    };
+    const { error } = await cloud.client.rpc("upsert_brotherhood_event_recap", { p_event_id: eventId, p_recap: payload });
+    if (error) throw error;
+    await loadBrotherhoodEvents();
+    closeModal();
+    render();
+    toast("Event recap saved.");
+  } catch (err) {
+    logSupabaseError("save brotherhood recap failed", err);
+    toast(formatSupabaseError(err, "Event recap could not be saved."));
+  }
+}
+
+async function setBrotherhoodEventStatus(eventId, status) {
+  if (!canManageBrotherhoodEvents()) return toast("VPMD, President, or Admin access required.");
+  if (!confirm(`${status} this Brotherhood Event?`)) return;
+  try {
+    const { error } = await cloud.client.rpc("set_brotherhood_event_status", { p_event_id: eventId, p_status: status });
+    if (error) throw error;
+    await loadBrotherhoodEvents();
+    closeModal();
+    render();
+    toast(`Event ${status.toLowerCase()}.`);
+  } catch (err) {
+    logSupabaseError("set brotherhood status failed", err);
+    toast(formatSupabaseError(err, "Event status could not be changed."));
+  }
+}
+
+async function deleteBrotherhoodEvent(eventId) {
+  if (!canManageBrotherhoodEvents()) return toast("VPMD, President, or Admin access required.");
+  const event = brotherhood.events.find((row) => row.id === eventId);
+  if (!event) return toast("Event not found.");
+  const related = eventRsvps(eventId).length + eventAttendance(eventId).length;
+  const warning = related ? `This event has ${related} RSVP/attendance record${related === 1 ? "" : "s"}. Archiving is recommended for historical accuracy. To permanently delete it, type DELETE.` : `Delete "${event.title}"? This cannot be undone.`;
+  if (!confirm(warning)) return;
+  if (related) {
+    const typed = prompt(`Type DELETE to permanently delete "${event.title}".`);
+    if (typed !== "DELETE") return toast("Delete cancelled.");
+  }
+  try {
+    const { error } = await cloud.client.rpc("delete_brotherhood_event", { p_event_id: eventId });
+    if (error) throw error;
+    await loadBrotherhoodEvents();
+    closeModal();
+    render();
+    toast("Brotherhood Event deleted.");
+  } catch (err) {
+    logSupabaseError("delete brotherhood event failed", err);
+    toast(formatSupabaseError(err, "Event could not be deleted."));
+  }
 }
 
 function renderAlertRow(row) {
@@ -1620,7 +2385,7 @@ function renderRoleFocusBoard(m) {
   ];
   const vpmdItems = [
     `${activeMembers().filter((member) => member.followUpDate && member.followUpDate <= todayIso()).length} members needing follow-up`,
-    `${state.events.filter((event) => !event.archived && (event.type === "Brotherhood" || event.eventType === "Brotherhood" || event.event_category === "Brotherhood") && event.date >= todayIso()).length} upcoming brotherhood events`
+    `${brotherhoodStats().upcoming} upcoming brotherhood events`
   ];
   return `<section class="panel role-focus-panel">
     <div class="panel-head"><div><h3>Role focus</h3><p class="muted">Quick views for the officers who run the chapter week to week.</p></div></div>
@@ -2670,6 +3435,41 @@ function bindViewActions(root) {
   root.querySelectorAll("[data-attendance-session]").forEach((el) => el.addEventListener("click", async () => { attendanceManager.selectedSessionId = el.dataset.attendanceSession; await loadAttendanceManager(el.dataset.attendanceSession); render(); }));
   root.querySelector("#attendanceSessionSelect")?.addEventListener("change", async (ev) => { attendanceManager.selectedSessionId = ev.target.value; await loadAttendanceManager(ev.target.value); render(); });
   root.querySelector("#attendanceSearch")?.addEventListener("input", (ev) => { attendanceManager.search = ev.target.value; render(); });
+  root.querySelectorAll("[data-brotherhood-refresh]").forEach((el) => el.addEventListener("click", async () => { await loadBrotherhoodEvents(); render(); }));
+  root.querySelectorAll("[data-brotherhood-create]").forEach((el) => el.addEventListener("click", () => openBrotherhoodEventForm()));
+  root.querySelectorAll("[data-brotherhood-open]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); openBrotherhoodEventDetails(el.dataset.brotherhoodOpen); }));
+  root.querySelectorAll("[data-brotherhood-edit]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); openBrotherhoodEventForm(el.dataset.brotherhoodEdit); }));
+  root.querySelectorAll("[data-brotherhood-duplicate]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); duplicateBrotherhoodEvent(el.dataset.brotherhoodDuplicate); }));
+  root.querySelectorAll("[data-brotherhood-rsvp]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); openBrotherhoodRsvpForm(el.dataset.brotherhoodRsvp); }));
+  root.querySelectorAll("[data-brotherhood-attendance]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); openBrotherhoodAttendanceForm(el.dataset.brotherhoodAttendance); }));
+  root.querySelectorAll("[data-brotherhood-recap]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); openBrotherhoodRecapForm(el.dataset.brotherhoodRecap); }));
+  root.querySelectorAll("[data-brotherhood-delete]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); deleteBrotherhoodEvent(el.dataset.brotherhoodDelete); }));
+  root.querySelectorAll("[data-brotherhood-status]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); const [eventId, status] = el.dataset.brotherhoodStatus.split(":"); setBrotherhoodEventStatus(eventId, status); }));
+  root.querySelectorAll("[data-brotherhood-attendance-status]").forEach((el) => el.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    const [eventId, memberId, status] = el.dataset.brotherhoodAttendanceStatus.split(":");
+    const existing = brotherhood.attendance.find((a) => a.eventId === eventId && a.memberId === memberId);
+    const reason = existing?.status && existing.status !== status ? prompt(`Correction reason for changing ${memberName(memberId)} from ${existing.status} to ${status}:`) || "" : "";
+    if (existing?.status && existing.status !== status && !reason.trim()) return toast("Correction reason is required.");
+    await setBrotherhoodAttendance(eventId, memberId, status, reason);
+  }));
+  root.querySelectorAll("[data-brotherhood-bulk-attendance]").forEach((el) => el.addEventListener("click", async () => {
+    const [eventId, status] = el.dataset.brotherhoodBulkAttendance.split(":");
+    await bulkBrotherhoodAttendance(eventId, status);
+  }));
+  root.querySelectorAll("[data-brotherhood-filter]").forEach((el) => el.addEventListener("click", () => {
+    const [key, value] = el.dataset.brotherhoodFilter.split(":");
+    brotherhood.filter = { ...(brotherhood.filter || {}), [key]: value };
+    render();
+  }));
+  root.querySelectorAll("[data-brotherhood-filter-select]").forEach((el) => el.addEventListener("change", () => {
+    brotherhood.filter = { ...(brotherhood.filter || {}), [el.dataset.brotherhoodFilterSelect]: el.value };
+    render();
+  }));
+  root.querySelector("#brotherhoodSearch")?.addEventListener("input", (ev) => {
+    brotherhood.filter = { ...(brotherhood.filter || {}), q: ev.target.value };
+    render();
+  });
   root.querySelectorAll("[data-my-task-status]").forEach((el) => el.addEventListener("click", async () => {
     const [taskId, status] = el.dataset.myTaskStatus.split(":");
     await updateMyTaskStatus(taskId, status);
