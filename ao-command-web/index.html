@@ -36,14 +36,35 @@
           <div class="topbar-actions">
             <button class="ghost hidden" id="globalSearchBtn">Search</button>
             <button class="ghost hidden" id="presentationBtn">Presentation Mode</button>
-            <span class="cloud-status" id="cloudStatus">Sign in required</span>
-            <button class="ghost" id="undoBtn" title="Undo last change">Undo</button>
+            <div class="add-member-menu hidden" id="addMemberMenu">
+              <button class="primary" id="quickAddMemberBtn">Add Member</button>
+              <button class="primary icon-button" id="addMemberMenuBtn" aria-label="Open add member menu" aria-expanded="false">▾</button>
+              <div class="profile-dropdown compact-dropdown hidden" id="addMemberDropdown">
+                <button id="addMemberDropdownBtn">Add Member</button>
+                <button id="importRosterDropdownBtn">Import Roster</button>
+              </div>
+            </div>
             <button class="ghost" id="signInBtn">Sign in</button>
-            <button class="ghost hidden" id="syncBtn">Sync cloud</button>
-            <button class="ghost hidden" id="signOutBtn">Sign out</button>
-            <button class="ghost" id="importBtn">Import CSV/JSON</button>
-            <button class="ghost" id="exportBtn">Backup</button>
-            <button class="danger" id="resetBtn">Clear local data</button>
+            <div class="profile-menu hidden" id="profileMenu">
+              <button class="avatar-button" id="profileMenuBtn" aria-label="Open account menu" aria-expanded="false">AO</button>
+              <div class="profile-dropdown hidden" id="profileDropdown">
+                <section>
+                  <p class="menu-label">Account</p>
+                  <span class="menu-status" id="cloudStatus">Sign in required</span>
+                  <button id="signOutBtn">Sign out</button>
+                </section>
+                <section>
+                  <p class="menu-label">Data & Sync</p>
+                  <button id="syncBtn">Sync cloud</button>
+                  <button id="importBtn">Import CSV/JSON</button>
+                  <button id="exportBtn">Backup</button>
+                </section>
+                <section>
+                  <p class="menu-label danger-label">Danger Zone</p>
+                  <button class="danger-menu-item" id="resetBtn">Clear local data</button>
+                </section>
+              </div>
+            </div>
             <input hidden id="importFile" type="file" accept=".json,.csv,text/csv,application/json" />
           </div>
         </header>

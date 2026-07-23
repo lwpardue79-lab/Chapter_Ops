@@ -73,6 +73,14 @@ const navigationItems = [
   { view: "reports", label: "Reports & Analytics", permission: "reports.executive.view" },
   { view: "settings", label: "Administration", permission: "settings.view" }
 ];
+const navigationSections = [
+  { label: "Overview", views: ["dashboard", "alerts", "tasks"] },
+  { label: "Members", views: ["members", "leadership", "handoffs"] },
+  { label: "Recruitment & Brotherhood", views: ["recruitment", "brotherhood", "events"] },
+  { label: "Finance", views: ["finance"] },
+  { label: "Reporting", views: ["kpis", "reports"] },
+  { label: "System", views: ["settings"] }
+];
 const memberNavigationItems = [
   { tab: "home", label: "Home" },
   { tab: "profile", label: "My Profile" },
@@ -305,6 +313,8 @@ function snapshot(action, related = {}) {
   historyStack.push(JSON.stringify(state));
   if (historyStack.length > 25) historyStack.shift();
   logActivity(action, related);
+  window.clearTimeout(snapshot.undoTimer);
+  snapshot.undoTimer = window.setTimeout(() => toast(`Change saved: ${action}`, { undo: true }), 0);
 }
 
 function logActivity(action, related = {}) {
@@ -347,13 +357,21 @@ function updateCloudUi(message) {
   document.getElementById("globalSearchBtn").classList.toggle("hidden", !cloud.user || cloud.profile?.approval_status !== "approved");
   document.getElementById("presentationBtn").classList.toggle("hidden", !cloud.user || cloud.profile?.approval_status !== "approved" || !isOperationsWorkspaceAllowed());
   document.getElementById("presentationBtn").textContent = presentationMode ? "Exit Presentation" : "Presentation Mode";
+  document.getElementById("addMemberMenu").classList.toggle("hidden", !cloud.user || cloud.profile?.approval_status !== "approved" || !can("members.create"));
+  document.getElementById("profileMenu").classList.toggle("hidden", !cloud.user);
+  document.getElementById("profileMenuBtn").textContent = profileInitials();
   document.getElementById("signInBtn").classList.toggle("hidden", !!cloud.user);
   document.getElementById("syncBtn").classList.toggle("hidden", !cloud.user || !isFullWorkspaceAllowed());
   document.getElementById("signOutBtn").classList.toggle("hidden", !cloud.user);
-  document.getElementById("undoBtn").classList.toggle("hidden", !cloud.user || !isFullWorkspaceAllowed());
   document.getElementById("importBtn").classList.toggle("hidden", !cloud.user || (cloud.client && !canAny(["members.import", "finance.import", "backup.restore", "all"])));
   document.getElementById("exportBtn").classList.toggle("hidden", !cloud.user || (cloud.client && !canAny(["backup.create", "reports.export", "members.export", "finance.export", "all"])));
   document.getElementById("resetBtn").classList.toggle("hidden", !cloud.user || (cloud.client && !can("workspace.clear")));
+}
+
+function profileInitials() {
+  const name = [cloud.profile?.full_name, cloud.profile?.email, cloud.user?.email].find(Boolean) || "AO";
+  const parts = String(name).replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : parts[0]?.slice(0, 2) || "AO").toUpperCase();
 }
 
 async function signIn() {
@@ -1397,7 +1415,17 @@ function refreshNavigation() {
     return;
   }
   const items = navigationItems.filter((item) => !cloud.client || !cloud.user || can(item.permission));
-  nav.innerHTML = items.map((item) => `<button class="nav-item ${item.view === activeView ? "active" : ""}" data-view="${safe(item.view)}">${safe(item.label)}</button>`).join("");
+  const itemByView = new Map(items.map((item) => [item.view, item]));
+  const activeSection = navigationSections.find((section) => section.views.includes(activeView))?.label || navigationSections[0].label;
+  nav.innerHTML = navigationSections.map((section) => {
+    const sectionItems = section.views.map((view) => itemByView.get(view)).filter(Boolean);
+    if (!sectionItems.length) return "";
+    const open = section.label === activeSection;
+    return `<section class="nav-section ${open ? "open" : ""}">
+      <p class="nav-section-label">${safe(section.label)}</p>
+      <div class="nav-section-items">${open ? sectionItems.map((item) => `<button class="nav-item ${item.view === activeView ? "active" : ""}" data-view="${safe(item.view)}">${safe(item.label)}</button>`).join("") : ""}</div>
+    </section>`;
+  }).join("");
   nav.querySelectorAll(".nav-item").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 }
 
@@ -1702,50 +1730,43 @@ function renderDashboard() {
   if (!can("dashboard.executive.view") && !can("all")) return renderRoleScopedDashboard(m);
   const needsSetup = !state.settings.setupComplete || !state.settings.term || !state.settings.academicYear;
   const alerts = commandAlerts(m);
+  const deadlines = openTasks()
+    .filter((t) => t.dueDate && t.dueDate >= todayIso())
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 6);
   return `
-    ${renderPageHeader("Command Center", `${productTagline} · Kansas State University`, [
-      needsSetup ? ["Complete Setup", "primary", "settings"] : ["Add Member", "primary", "members:add"],
-      ["Import Roster", "ghost", "members:import"]
-    ])}
     ${needsSetup ? renderSetupPrompt() : ""}
     ${alerts.length ? renderCommandAlerts(alerts) : ""}
-    ${renderRoleHomeSpotlight(m)}
-    <div class="kpi-grid">
-      ${metricCard("Active Members", m.members, "members")}
-      ${metricCard("Outstanding Dues", money(m.outstanding), "finance", "outstanding=true")}
-      ${metricCard("Open Officer Tasks", m.tasks, "tasks", "status=open")}
-      ${metricCard("Upcoming Events", m.events, "events")}
-      ${metricCard("PNMs Requiring Follow-Up", m.pnmFollowUps, "recruitment")}
-      ${metricCard("Chapter Attendance Rate", m.attendanceRate, "events")}
-      ${metricCard("Budget Remaining", money(m.budgetRemaining), "finance")}
-      ${metricCard("Reports Awaiting Review", m.reportsAwaitingReview, "kpis")}
-    </div>
-    <section class="panel">
-      <div class="panel-head"><div><h3>Executive Priorities</h3><p class="muted">Items that may need attention before the next leadership meeting.</p></div></div>
-      <div class="quick-grid priority-grid">
-        ${priorityTile("Overdue dues", m.pastDue, "finance", "pastdue=true")}
-        ${priorityTile("Overdue officer tasks", openTasks().filter((t) => t.dueDate && t.dueDate < todayIso()).length, "tasks", "status=open")}
-        ${priorityTile("PNMs needing follow-up", m.pnmFollowUps, "recruitment")}
-        ${priorityTile("Missing attendance records", m.missingAttendance, "events")}
-        ${priorityTile("Upcoming deadlines", openTasks().filter((t) => t.dueDate && t.dueDate >= todayIso()).length, "tasks")}
-        ${priorityTile("Reports needing review", m.reportsAwaitingReview, "kpis")}
-        ${priorityTile("Handoffs missing", m.handoffMissing, "handoffs")}
+    <section class="panel dashboard-summary">
+      <div class="panel-head"><div><h3>Executive Summary</h3><p class="muted">The chapter’s most important operational signals.</p></div></div>
+      <div class="executive-summary-grid">
+        ${summaryCard("Outstanding Dues", money(m.outstanding), "finance", "outstanding=true", "large")}
+        ${summaryCard("Reports Awaiting Review", m.reportsAwaitingReview, "kpis", "", "large")}
+        ${summaryCard("Command Alerts", commandAlertRows().filter((row) => routeAllowed(row.view)).length, "alerts", "", "large")}
+        ${summaryCard("Active Members", m.members, "members")}
+        ${summaryCard("Chapter Attendance Rate", m.attendanceRate, "events")}
+        ${summaryCard("Open Officer Tasks", m.tasks, "tasks", "status=open")}
+        ${summaryCard("Upcoming Events", m.events, "events")}
       </div>
     </section>
-    ${renderCommandReadiness()}
-    ${renderRoleFocusBoard(m)}
-    <div class="three-col">
-      ${listPanel("Financial snapshot", [
-        `Expected total: ${money(m.totalBilled)}<span>Based on dues charges entered</span>`,
-        `Collected: ${money(m.totalCollected)}<span>Payments recorded</span>`,
-        `Payment plans: ${m.plans}<span>Members marked on payment plans</span>`
-      ], "finance")}
-      ${listPanel("Next steps", getNextSteps(), "settings")}
+    <div class="three-col dashboard-lower-grid">
+      <section class="panel">
+        <div class="panel-head"><h3>Executive Priorities</h3><button class="ghost small" data-go="alerts">Open Alerts</button></div>
+        <div class="quick-grid priority-grid compact-priorities">
+          ${priorityTile("Overdue dues", m.pastDue, "finance", "pastdue=true")}
+          ${priorityTile("Overdue officer tasks", openTasks().filter((t) => t.dueDate && t.dueDate < todayIso()).length, "tasks", "status=open")}
+          ${priorityTile("PNMs needing follow-up", m.pnmFollowUps, "recruitment")}
+          ${priorityTile("Missing attendance records", m.missingAttendance, "events")}
+          ${priorityTile("Reports needing review", m.reportsAwaitingReview, "kpis")}
+          ${priorityTile("Handoffs missing", m.handoffMissing, "handoffs")}
+        </div>
+      </section>
+      ${listPanel("Upcoming Deadlines", deadlines.map((t) => `${safe(t.title)}<span>${safe([t.assignedPerson, t.dueDate, t.priority].filter(Boolean).join(" · "))}</span>`), "tasks")}
       ${listPanel("Recent activity", state.activity.slice(0, 8).map((a) => `${new Date(a.at).toLocaleString()}<span>${safe(a.action)}</span>`), "reports")}
     </div>
-    <section class="panel">
-      <div class="panel-head"><h3>Quick actions</h3></div>
-      <div class="quick-grid">
+    <section class="panel compact-panel">
+      <div class="panel-head"><h3>Operations shortcuts</h3></div>
+      <div class="quick-grid compact-actions">
         <button class="action-tile" data-add="members">Add member</button>
         <button class="action-tile" data-import="members">Import roster</button>
         <button class="action-tile" data-add="finance">Add dues charge</button>
@@ -1755,6 +1776,10 @@ function renderDashboard() {
         <button class="action-tile" data-add="tasks">Create task</button>
       </div>
     </section>`;
+}
+
+function summaryCard(label, value, view, filter = "", size = "small") {
+  return `<button class="summary-card ${safe(size)}" data-go="${safe(view)}" data-filter="${safe(filter)}"><span>${safe(label)}</span><strong>${safe(value)}</strong><em>Open</em></button>`;
 }
 
 function renderPresentationMode() {
@@ -5689,10 +5714,13 @@ function closeModal() {
   document.getElementById("modalBackdrop").classList.add("hidden");
 }
 
-function toast(message) {
+function toast(message, options = {}) {
   const el = document.getElementById("toast");
-  el.textContent = message;
+  el.innerHTML = options.undo && historyStack.length
+    ? `<span>${safe(message)}</span><button class="toast-undo" data-toast-undo>Undo</button>`
+    : safe(message);
   el.classList.remove("hidden");
+  el.querySelector("[data-toast-undo]")?.addEventListener("click", undo);
   setTimeout(() => el.classList.add("hidden"), 3000);
 }
 
@@ -5711,6 +5739,33 @@ document.getElementById("presentationBtn").addEventListener("click", () => {
   presentationMode = !presentationMode;
   render();
 });
+document.getElementById("quickAddMemberBtn").addEventListener("click", () => openForm("members"));
+document.getElementById("addMemberMenuBtn").addEventListener("click", (ev) => {
+  ev.stopPropagation();
+  const dropdown = document.getElementById("addMemberDropdown");
+  dropdown.classList.toggle("hidden");
+  document.getElementById("addMemberMenuBtn").setAttribute("aria-expanded", String(!dropdown.classList.contains("hidden")));
+  document.getElementById("profileDropdown").classList.add("hidden");
+});
+document.getElementById("addMemberDropdownBtn").addEventListener("click", () => {
+  document.getElementById("addMemberDropdown").classList.add("hidden");
+  openForm("members");
+});
+document.getElementById("importRosterDropdownBtn").addEventListener("click", () => {
+  document.getElementById("addMemberDropdown").classList.add("hidden");
+  beginImport("members");
+});
+document.getElementById("profileMenuBtn").addEventListener("click", (ev) => {
+  ev.stopPropagation();
+  const dropdown = document.getElementById("profileDropdown");
+  dropdown.classList.toggle("hidden");
+  document.getElementById("profileMenuBtn").setAttribute("aria-expanded", String(!dropdown.classList.contains("hidden")));
+  document.getElementById("addMemberDropdown").classList.add("hidden");
+});
+document.addEventListener("click", (ev) => {
+  if (!ev.target.closest("#profileMenu")) document.getElementById("profileDropdown").classList.add("hidden");
+  if (!ev.target.closest("#addMemberMenu")) document.getElementById("addMemberDropdown").classList.add("hidden");
+});
 document.addEventListener("keydown", (ev) => {
   const isSearchShortcut = (ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k";
   if (!isSearchShortcut || ev.target?.closest?.("input, textarea, select")) return;
@@ -5719,7 +5774,6 @@ document.addEventListener("keydown", (ev) => {
 });
 document.getElementById("signOutBtn").addEventListener("click", signOut);
 document.getElementById("syncBtn").addEventListener("click", () => syncCloudWorkspace(true));
-document.getElementById("undoBtn").addEventListener("click", undo);
 document.getElementById("exportBtn").addEventListener("click", exportBackup);
 document.getElementById("importBtn").addEventListener("click", () => {
   const map = { recruitment: "pnms", members: "members", events: "events", finance: "finance", tasks: "tasks" };
