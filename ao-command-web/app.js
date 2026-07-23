@@ -21,6 +21,7 @@ const viewNames = {
   brotherhood: "Brotherhood Events",
   members: "Member Directory",
   leadership: "Leadership",
+  handoffs: "Officer Handoffs",
   recruitment: "Recruitment Pipeline",
   events: "Events & Attendance",
   finance: "Financial Operations",
@@ -34,16 +35,16 @@ const viewNames = {
 const permissionRoles = ["Admin", "President", "Treasurer", "Assistant Treasurer", "Secretary", "VPMD", "Recruitment", "Exec Board", "Committee Chair", "Active Member", "Read-only Advisor"];
 const roleRules = {
   Admin: ["all"],
-  President: ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.archive", "members.import", "members.export", "officers.view", "officers.manage", "events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "recruitment.view", "recruitment.manage", "attendance.view", "attendance.manage", "finance.summary.view", "finance.member_balances.view", "reports.executive.view", "reports.finance.view", "reports.export", "kpi.view", "kpi.manage_all", "tasks.view_all", "tasks.manage", "settings.view", "backup.create"],
-  Treasurer: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "events.view", "brotherhood.events.admin.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  "Assistant Treasurer": ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "events.view", "brotherhood.events.admin.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  Secretary: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.import", "members.export", "events.view", "brotherhood.events.admin.view", "attendance.view", "attendance.manage", "reports.attendance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  VPMD: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.update", "members.export", "events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "attendance.view", "reports.member_development.view", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  Recruitment: ["dashboard.role.view", "members.list.view", "recruitment.view", "recruitment.manage", "reports.recruitment.view", "kpi.view", "kpi.submit_own"],
-  "Exec Board": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.export", "officers.view", "events.view", "brotherhood.events.admin.view", "recruitment.view", "attendance.view", "reports.executive.view", "kpi.view", "kpi.submit_own", "tasks.view_all"],
-  "Committee Chair": ["workspace.full.read", "dashboard.role.view", "members.list.view", "events.view", "brotherhood.events.admin.view", "attendance.view", "attendance.manage", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  President: ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.archive", "members.import", "members.export", "officers.view", "officers.manage", "handoffs.view", "handoffs.manage", "handoffs.access", "events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "recruitment.view", "recruitment.manage", "attendance.view", "attendance.manage", "finance.summary.view", "finance.member_balances.view", "reports.executive.view", "reports.finance.view", "reports.export", "kpi.view", "kpi.manage_all", "tasks.view_all", "tasks.manage", "settings.view", "backup.create"],
+  Treasurer: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  "Assistant Treasurer": ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  Secretary: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.import", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "attendance.view", "attendance.manage", "reports.attendance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  VPMD: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.update", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "attendance.view", "reports.member_development.view", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  Recruitment: ["dashboard.role.view", "members.list.view", "handoffs.manage_own", "handoffs.access", "recruitment.view", "recruitment.manage", "reports.recruitment.view", "kpi.view", "kpi.submit_own"],
+  "Exec Board": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.export", "officers.view", "handoffs.view", "handoffs.access", "events.view", "brotherhood.events.admin.view", "recruitment.view", "attendance.view", "reports.executive.view", "kpi.view", "kpi.submit_own", "tasks.view_all"],
+  "Committee Chair": ["workspace.full.read", "dashboard.role.view", "members.list.view", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "attendance.view", "attendance.manage", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
   "Active Member": ["member.portal.view", "members.self.view", "finance.self.view", "attendance.self.view", "events.member.view", "events.rsvp", "tasks.view_own"],
-  "Read-only Advisor": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "officers.view", "events.view", "brotherhood.events.admin.view", "attendance.view", "reports.executive.view", "reports.finance.view", "kpi.view"]
+  "Read-only Advisor": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "officers.view", "handoffs.view", "handoffs.access", "events.view", "brotherhood.events.admin.view", "attendance.view", "reports.executive.view", "reports.finance.view", "kpi.view"]
 };
 const legacyPermissionMap = {
   view_all: "members.list.view",
@@ -63,6 +64,7 @@ const navigationItems = [
   { view: "brotherhood", label: "Brotherhood Events", permission: "events.view" },
   { view: "members", label: "Member Directory", permission: "members.list.view" },
   { view: "leadership", label: "Leadership", permission: "officers.view" },
+  { view: "handoffs", label: "Officer Handoffs", permission: "handoffs.access" },
   { view: "recruitment", label: "Recruitment Pipeline", permission: "recruitment.view" },
   { view: "events", label: "Events & Attendance", permission: "attendance.view" },
   { view: "finance", label: "Financial Operations", permission: "finance.member_balances.view" },
@@ -125,6 +127,7 @@ let brotherhood = {
   recaps: [],
   filter: { mode: "upcoming", q: "", category: "All", status: "All", required: "All" }
 };
+let handoffs = { loading: false, error: "", saving: false, records: [] };
 
 function resolvedRole() {
   if (cloud.profile?.approval_status === "approved") return displayRoleForProfile(cloud.profile, cloud.currentMembership || {});
@@ -421,6 +424,7 @@ async function bootstrapUser() {
       await loadCloudWorkspace();
       if (can("attendance.view")) await loadAttendanceManager();
       if (canAny(["events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "all"])) await loadBrotherhoodEvents();
+      if (canViewHandoffs()) await loadOfficerHandoffs();
     }
     else {
       resetSensitiveClientState(state.settings.currentRole);
@@ -439,6 +443,7 @@ function resetSensitiveClientState(role = "Active Member") {
   memberPortal = { loading: false, error: "", data: null, saving: false };
   attendanceManager = { loading: false, error: "", data: null, selectedSessionId: "", search: "", filter: "all", saving: new Set(), saveStatus: "" };
   brotherhood = { loading: false, error: "", saving: false, events: [], privateNotes: [], rsvps: [], attendance: [], recaps: [], filter: { mode: "upcoming", q: "", category: "All", status: "All", required: "All" } };
+  handoffs = { loading: false, error: "", saving: false, records: [] };
   historyStack = [];
   try {
     localStorage.removeItem(storeKey);
@@ -761,6 +766,7 @@ function metrics() {
   const attendedRecords = attendanceRecords.filter((a) => ["Present", "Late", "Excused", "present", "late", "excused"].includes(a.status));
   const reportSummary = state.kpiMeetings?.length ? kpiMeetingSummary(state.kpiMeetings[0].id) : { missingReports: 0 };
   const expenseTotal = financeRows().filter((f) => ["Expense", "Reimbursement", "Refund"].includes(f.type)).reduce((s, f) => s + parseMoney(f.amount), 0);
+  const handoffMissing = handoffPositions().filter((position) => !handoffRecordForPosition(position)).length;
   return {
     members: activeMembers().length,
     newMembers: activeMembers().filter((m) => m.initiationStatus === "New Member" || m.memberStatus === "New Member").length,
@@ -782,6 +788,7 @@ function metrics() {
     missingAttendance: state.events.filter((e) => !e.archived && e.date && e.date <= todayIso() && !state.attendance.some((a) => a.eventId === e.id)).length,
     budgetRemaining: totalCollected - expenseTotal,
     reportsAwaitingReview: reportSummary.missingReports || 0,
+    handoffMissing,
     bidsExtended,
     bidsAccepted,
     acceptanceRate: pct(bidsAccepted, bidsExtended)
@@ -800,6 +807,27 @@ function canManageBrotherhoodEvents() {
 
 function canViewBrotherhoodAdmin() {
   return canManageBrotherhoodEvents() || can("brotherhood.events.admin.view") || can("all");
+}
+
+function canViewHandoffs() {
+  return canAny(["handoffs.view", "handoffs.manage", "handoffs.manage_own", "handoffs.access", "all"]);
+}
+
+function canManageAllHandoffs() {
+  return can("handoffs.manage") || can("all");
+}
+
+function canManageOwnHandoffs() {
+  return can("handoffs.manage_own") || canManageAllHandoffs();
+}
+
+function canEditHandoffPosition(position = "") {
+  if (canManageAllHandoffs()) return true;
+  if (!canManageOwnHandoffs()) return false;
+  const myMemberId = memberIdForCurrentUser();
+  if (!myMemberId && !cloud.client) return true;
+  const target = canonicalPositionTitle(position);
+  return buildOfficerDirectory().allOfficers.some((officer) => officer.memberId === myMemberId && officer.roles.some((role) => canonicalPositionTitle(role) === target));
 }
 
 function memberIdForCurrentUser() {
@@ -948,6 +976,35 @@ function dbRecapToClient(row = {}) {
   };
 }
 
+function dbHandoffToClient(row = {}) {
+  return {
+    id: row.id,
+    chapterId: row.chapter_id,
+    positionTitle: canonicalPositionTitle(row.position_title || ""),
+    outgoingMemberId: row.outgoing_member_id || "",
+    incomingMemberId: row.incoming_member_id || "",
+    termLabel: row.term_label || "",
+    responsibilities: row.responsibilities || "",
+    recurringDuties: row.recurring_duties || "",
+    importantDates: row.important_dates || "",
+    currentProjects: row.current_projects || "",
+    openTasks: row.open_tasks || "",
+    keyContacts: row.key_contacts || "",
+    filesUrl: row.files_url || "",
+    procedures: row.procedures || "",
+    lessonsLearned: row.lessons_learned || "",
+    recommendations: row.recommendations || "",
+    privateTransitionNotes: row.private_transition_notes || "",
+    status: row.status || "Not started",
+    incomingAcknowledgedAt: row.incoming_acknowledged_at || "",
+    presidentAcknowledgedAt: row.president_acknowledged_at || "",
+    createdBy: row.created_by || "",
+    updatedBy: row.updated_by || "",
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || ""
+  };
+}
+
 async function loadBrotherhoodEvents() {
   if (!cloud.client || !cloud.user) return;
   brotherhood.loading = true;
@@ -981,6 +1038,25 @@ async function loadBrotherhoodEvents() {
     logSupabaseError("load brotherhood events failed", err);
     brotherhood.loading = false;
     brotherhood.error = formatSupabaseError(err, "Brotherhood events could not be loaded.");
+  }
+}
+
+async function loadOfficerHandoffs() {
+  if (!cloud.client || !cloud.user || !canViewHandoffs()) return;
+  handoffs = { ...handoffs, loading: true, error: "" };
+  render();
+  try {
+    const organizationId = await ensureCloudWorkspace();
+    const { data, error } = await cloud.client
+      .from("officer_handoffs")
+      .select("*")
+      .eq("chapter_id", organizationId)
+      .order("updated_at", { ascending: false });
+    if (error) throw error;
+    handoffs = { loading: false, error: "", saving: false, records: (data || []).map(dbHandoffToClient) };
+  } catch (err) {
+    logSupabaseError("officer handoffs load failed", err);
+    handoffs = { ...handoffs, loading: false, error: formatSupabaseError(err, "Officer handoffs could not be loaded.") };
   }
 }
 
@@ -1288,6 +1364,7 @@ function render() {
     kpis: renderKpiReports,
     tasks: () => renderCollection("tasks"),
     leadership: renderLeadership,
+    handoffs: renderOfficerHandoffs,
     reports: renderReports,
     settings: renderSettings
   }[activeView] || renderDashboard)();
@@ -1554,6 +1631,7 @@ function renderHeaderAction(label, style = "ghost", target = "") {
   if (target === "portal-refresh") return `<button class="${safe(style)}" data-refresh-member-portal>${safe(label)}</button>`;
   if (target === "brotherhood-create") return `<button class="${safe(style)}" data-brotherhood-create>${safe(label)}</button>`;
   if (target === "brotherhood-refresh") return `<button class="${safe(style)}" data-brotherhood-refresh>${safe(label)}</button>`;
+  if (target === "handoffs-refresh") return `<button class="${safe(style)}" data-handoffs-refresh>${safe(label)}</button>`;
   if (target === "attendance-start") return `<button class="${safe(style)}" data-attendance-start>${safe(label)}</button>`;
   if (target === "attendance-create") return `<button class="${safe(style)}" data-attendance-create>${safe(label)}</button>`;
   if (target === "attendance-refresh") return `<button class="${safe(style)}" data-attendance-refresh>${safe(label)}</button>`;
@@ -1639,6 +1717,7 @@ function renderDashboard() {
         ${priorityTile("Missing attendance records", m.missingAttendance, "events")}
         ${priorityTile("Upcoming deadlines", openTasks().filter((t) => t.dueDate && t.dueDate >= todayIso()).length, "tasks")}
         ${priorityTile("Reports needing review", m.reportsAwaitingReview, "kpis")}
+        ${priorityTile("Handoffs missing", m.handoffMissing, "handoffs")}
       </div>
     </section>
     ${renderCommandReadiness()}
@@ -1679,10 +1758,10 @@ function renderRoleScopedDashboard(m) {
 }
 
 function roleScopedHeaderActions(role) {
-  if (role === "Recruitment") return [["Add PNM", "primary", "pnms:add"], ["Export Recruitment Packet", "ghost", "export:recruitment-packet"]];
-  if (["Treasurer", "Assistant Treasurer"].includes(role)) return [["Record Payment", "primary", "finance"], ["Export Treasurer Packet", "ghost", "export:treasurer-packet"]];
-  if (role === "Secretary") return [["Start Attendance", "primary", "attendance-start"], ["Export Secretary Packet", "ghost", "export:secretary-packet"]];
-  if (role === "VPMD") return [["Create Brotherhood Event", "primary", "brotherhood-create"], ["Create Task", "ghost", "tasks:add"], ["Export VPMD Packet", "ghost", "export:vpmd-packet"]];
+  if (role === "Recruitment") return [["Add PNM", "primary", "pnms:add"], ["Officer Handoff", "ghost", "handoffs"], ["Export Recruitment Packet", "ghost", "export:recruitment-packet"]];
+  if (["Treasurer", "Assistant Treasurer"].includes(role)) return [["Record Payment", "primary", "finance"], ["Officer Handoff", "ghost", "handoffs"], ["Export Treasurer Packet", "ghost", "export:treasurer-packet"]];
+  if (role === "Secretary") return [["Start Attendance", "primary", "attendance-start"], ["Officer Handoff", "ghost", "handoffs"], ["Export Secretary Packet", "ghost", "export:secretary-packet"]];
+  if (role === "VPMD") return [["Create Brotherhood Event", "primary", "brotherhood-create"], ["Officer Handoff", "ghost", "handoffs"], ["Export VPMD Packet", "ghost", "export:vpmd-packet"]];
   return [["Open Alerts", "primary", "alerts"]];
 }
 
@@ -1759,6 +1838,12 @@ function commandAlertRows() {
   });
   brotherhood.events.filter((event) => event.status === "Published" && event.endsAt && new Date(event.endsAt) < new Date() && !eventRecap(event.id)).forEach((event) => {
     add("Brotherhood", `${event.title} recap is due`, "Complete the event recap for officer transition records.", "brotherhood", "VPMD", dateOnly(event.endsAt), "Recap due", "Medium");
+  });
+  handoffPositions().filter((position) => !handoffRecordForPosition(position)).forEach((position) => {
+    add("Officer Handoffs", `${displayPosition(position)} handoff has not been started`, "Create the transition record before officer turnover.", "handoffs", displayPosition(position), "", "Not started", "Medium");
+  });
+  handoffs.records.filter((record) => record.status === "Ready for review" && !record.presidentAcknowledgedAt).forEach((record) => {
+    add("Officer Handoffs", `${displayPosition(record.positionTitle)} handoff is ready for review`, "President/Admin acknowledgement is pending.", "handoffs", displayPosition(record.positionTitle), "", "Ready for review", "Medium");
   });
   kpiReportsForMeeting(state.kpiMeetings[0]?.id || "").filter((r) => r.status !== "Submitted").forEach((report) => {
     add("KPI Reports", `${displayPosition(report.position)} report not submitted`, report.overallUpdate || "", "kpis", (report.officerMemberIds || [report.officerMemberId]).filter(Boolean).map(memberName).join(", "), "", report.status || "Draft", "Medium");
@@ -2887,6 +2972,73 @@ function renderLeadershipRoster() {
   </section>`;
 }
 
+function handoffRecordForPosition(position = "") {
+  const target = canonicalPositionTitle(position);
+  return handoffs.records
+    .filter((record) => canonicalPositionTitle(record.positionTitle) === target && record.status !== "Archived")
+    .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))[0] || null;
+}
+
+function handoffPositions() {
+  const directory = buildOfficerDirectory();
+  const fromOfficers = directory.allOfficers.flatMap((officer) => officer.roles || []);
+  const fromRecords = handoffs.records.map((record) => record.positionTitle);
+  return [...new Set([...fromOfficers, ...fromRecords].map(canonicalPositionTitle).filter((role) => role && role !== "General member"))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function renderOfficerHandoffs() {
+  if (!canViewHandoffs()) return `<section class="panel empty-state"><h3>Access restricted</h3><p>You do not have permission to view officer handoffs.</p></section>`;
+  const positions = handoffPositions();
+  const completed = handoffs.records.filter((record) => record.status === "Completed").length;
+  const ready = handoffs.records.filter((record) => record.status === "Ready for review").length;
+  const inProgress = handoffs.records.filter((record) => record.status === "In progress").length;
+  const missing = positions.filter((position) => !handoffRecordForPosition(position)).length;
+  const actions = [["Refresh", "ghost", "handoffs-refresh"], ["Export Handoffs", "ghost", "export:officer-handoffs"]];
+  return `${renderPageHeader("Officer Handoffs", "Preserve officer responsibilities, transition notes, files, and lessons learned.", actions)}
+    ${handoffs.loading ? `<section class="panel empty-state"><h3>Loading handoffs</h3><p>Getting the latest transition records from Supabase.</p></section>` : ""}
+    ${handoffs.error ? `<section class="notice error-notice"><h4>Officer Handoffs unavailable</h4><p>${safe(handoffs.error)}</p><button class="ghost" data-handoffs-refresh>Retry</button></section>` : ""}
+    <section class="panel">
+      <div class="panel-head"><div><h3>Transition readiness</h3><p class="muted">One workspace for each Executive Team position.</p></div></div>
+      <div class="mini-grid">
+        ${mini("Positions tracked", positions.length)}
+        ${mini("Completed", completed)}
+        ${mini("Ready for review", ready)}
+        ${mini("In progress", inProgress)}
+        ${mini("Missing handoffs", missing)}
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><div><h3>Handoff workspaces</h3><p class="muted">${positions.length} position${positions.length === 1 ? "" : "s"} shown.</p></div></div>
+      ${positions.length ? `<div class="card-grid">${positions.map(renderHandoffCard).join("")}</div>` : `<div class="empty-state"><h3>No officer positions available</h3><p>Add Leadership assignments first, then create handoff records for each role.</p><button class="primary" data-go="leadership">Open Leadership</button></div>`}
+    </section>`;
+}
+
+function renderHandoffCard(position) {
+  const record = handoffRecordForPosition(position);
+  const officers = buildOfficerDirectory().allOfficers.filter((officer) => officer.roles.some((role) => canonicalPositionTitle(role) === canonicalPositionTitle(position)));
+  const canEdit = canEditHandoffPosition(position);
+  const ownerNames = officers.map((officer) => memberName(officer.memberId)).filter(Boolean).join(", ") || "Unassigned";
+  return `<article class="profile-card">
+    <p class="eyebrow">${safe(positionResponsibilityLabel(position) || "Officer Transition")}</p>
+    <h3>${safe(displayPosition(position))}</h3>
+    <p class="muted">${safe(positionFullTitle(position))}</p>
+    <p><strong>Officer:</strong> ${safe(ownerNames)}</p>
+    <p><span class="status-pill">${safe(record?.status || "Not started")}</span></p>
+    ${record?.termLabel ? `<p class="muted">Term: ${safe(record.termLabel)}</p>` : ""}
+    ${record?.currentProjects ? `<p>${safe(record.currentProjects).slice(0, 180)}${record.currentProjects.length > 180 ? "…" : ""}</p>` : `<p class="muted">No transition details recorded yet.</p>`}
+    <div class="stack-list compact-stack">
+      ${record?.incomingAcknowledgedAt ? `<span class="stack-item">Incoming officer acknowledged<span>${safe(formatDateTime(record.incomingAcknowledgedAt))}</span></span>` : emptySmall("Incoming acknowledgement pending.")}
+      ${record?.presidentAcknowledgedAt ? `<span class="stack-item">President/Admin acknowledged<span>${safe(formatDateTime(record.presidentAcknowledgedAt))}</span></span>` : emptySmall("President/Admin review pending.")}
+    </div>
+    <div class="button-row">
+      ${canEdit ? `<button class="primary small" data-edit-handoff="${safe(record?.id || "")}" data-handoff-position="${safe(position)}">${record ? "Edit Handoff" : "Create Handoff"}</button>` : ""}
+      ${record && canEdit ? `<button class="ghost small" data-ack-handoff="${safe(record.id)}:incoming">Acknowledge</button>` : ""}
+      ${record && canManageAllHandoffs() ? `<button class="ghost small" data-ack-handoff="${safe(record.id)}:president">President Review</button>` : ""}
+    </div>
+  </article>`;
+}
+
 function renderReports() {
   const m = metrics();
   const officerDirectory = buildOfficerDirectory();
@@ -3503,6 +3655,12 @@ function bindViewActions(root) {
   root.querySelectorAll("[data-task-done]").forEach((el) => el.addEventListener("click", () => markTaskDone(el.dataset.taskDone)));
   root.querySelectorAll("[data-add-leadership]").forEach((el) => el.addEventListener("click", () => openLeadershipForm()));
   root.querySelectorAll("[data-edit-leadership]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); openLeadershipForm(el.dataset.editLeadership); }));
+  root.querySelectorAll("[data-edit-handoff]").forEach((el) => el.addEventListener("click", () => openHandoffForm(el.dataset.editHandoff || "", el.dataset.handoffPosition || "")));
+  root.querySelectorAll("[data-ack-handoff]").forEach((el) => el.addEventListener("click", () => {
+    const [id, acknowledgement] = el.dataset.ackHandoff.split(":");
+    acknowledgeOfficerHandoff(id, acknowledgement);
+  }));
+  root.querySelector("[data-handoffs-refresh]")?.addEventListener("click", loadOfficerHandoffs);
   root.querySelectorAll("[data-create-kpi-meeting]").forEach((el) => el.addEventListener("click", () => openKpiMeetingForm()));
   root.querySelectorAll("[data-edit-kpi-meeting]").forEach((el) => el.addEventListener("click", () => openKpiMeetingForm(el.dataset.editKpiMeeting)));
   root.querySelectorAll("[data-add-kpi-definition]").forEach((el) => el.addEventListener("click", () => openKpiDefinitionForm()));
@@ -4403,6 +4561,91 @@ function isDuplicateLeadershipAssignment(row, existingId = "") {
   return state.leadership.some((l) => l.id !== existingId && !l.archived && (l.assignedMember || l.member_id || l.memberId || l.user_id || l.userId || l.profile_id || l.profileId) === memberId && normalizeTitle(l.role) === roleKey);
 }
 
+function openHandoffForm(id = "", position = "") {
+  const existing = handoffs.records.find((record) => record.id === id) || null;
+  const source = existing || { positionTitle: position, status: "Not started" };
+  if (!canEditHandoffPosition(source.positionTitle)) return toast("You can only edit your own handoff unless you are President or Admin.");
+  const positionOptions = handoffPositions().includes(source.positionTitle)
+    ? handoffPositions()
+    : [source.positionTitle, ...handoffPositions()].filter(Boolean);
+  openModal(`<h3>${existing ? "Edit Officer Handoff" : "Create Officer Handoff"}</h3>
+    <form id="handoffForm" class="form-grid">
+      <label>Executive position<select name="positionTitle">${positionOptions.map((role) => `<option value="${safe(role)}" ${canonicalPositionTitle(source.positionTitle) === canonicalPositionTitle(role) ? "selected" : ""}>${safe(displayPosition(role))}</option>`).join("")}</select></label>
+      <label>Status<select name="status">${["Not started", "In progress", "Ready for review", "Completed", "Archived"].map((status) => `<option ${source.status === status ? "selected" : ""}>${safe(status)}</option>`).join("")}</select></label>
+      <label>Outgoing officer<select name="outgoingMemberId">${selectOptions("members").map(([v, t]) => `<option value="${safe(v)}" ${source.outgoingMemberId === v ? "selected" : ""}>${safe(t)}</option>`).join("")}</select></label>
+      <label>Incoming officer<select name="incomingMemberId">${selectOptions("members").map(([v, t]) => `<option value="${safe(v)}" ${source.incomingMemberId === v ? "selected" : ""}>${safe(t)}</option>`).join("")}</select></label>
+      <label class="wide">Term or transition window<input name="termLabel" value="${safe(source.termLabel || "")}" placeholder="Fall 2026 transition" /></label>
+      <label class="wide">Responsibilities<textarea name="responsibilities">${safe(source.responsibilities || "")}</textarea></label>
+      <label class="wide">Recurring duties<textarea name="recurringDuties">${safe(source.recurringDuties || "")}</textarea></label>
+      <label class="wide">Important dates<textarea name="importantDates">${safe(source.importantDates || "")}</textarea></label>
+      <label class="wide">Current projects<textarea name="currentProjects">${safe(source.currentProjects || "")}</textarea></label>
+      <label class="wide">Open tasks<textarea name="openTasks">${safe(source.openTasks || "")}</textarea></label>
+      <label class="wide">Key contacts<textarea name="keyContacts">${safe(source.keyContacts || "")}</textarea></label>
+      <label class="wide">Files / folder link<input name="filesUrl" value="${safe(source.filesUrl || "")}" placeholder="https://..." /></label>
+      <label class="wide">Procedures<textarea name="procedures">${safe(source.procedures || "")}</textarea></label>
+      <label class="wide">Lessons learned<textarea name="lessonsLearned">${safe(source.lessonsLearned || "")}</textarea></label>
+      <label class="wide">Recommendations<textarea name="recommendations">${safe(source.recommendations || "")}</textarea></label>
+      <label class="wide">Private transition notes<textarea name="privateTransitionNotes">${safe(source.privateTransitionNotes || "")}</textarea></label>
+      <div class="wide button-row"><button class="primary" ${handoffs.saving ? "disabled" : ""}>${handoffs.saving ? "Saving…" : "Save Handoff"}</button><button class="ghost" type="button" data-close-modal>Cancel</button></div>
+    </form>`);
+  document.getElementById("handoffForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const payload = Object.fromEntries(new FormData(ev.currentTarget).entries());
+    await saveOfficerHandoff(existing?.id || null, payload);
+  });
+}
+
+async function saveOfficerHandoff(id, payload) {
+  payload.positionTitle = canonicalPositionTitle(payload.positionTitle);
+  if (!payload.positionTitle) return toast("Executive position is required.");
+  if (!canEditHandoffPosition(payload.positionTitle)) return toast("You can only edit your own handoff unless you are President or Admin.");
+  handoffs = { ...handoffs, saving: true, error: "" };
+  render();
+  try {
+    if (cloud.client && cloud.user) {
+      const { data, error } = await cloud.client.rpc("upsert_officer_handoff", { p_handoff_id: id || null, p_handoff: payload });
+      if (error) throw error;
+      const saved = dbHandoffToClient(data || {});
+      handoffs.records = [saved, ...handoffs.records.filter((record) => record.id !== saved.id)];
+      await loadOfficerHandoffs();
+    } else {
+      const saved = { id: id || uid("handoff"), ...payload, updatedAt: new Date().toISOString() };
+      handoffs.records = [saved, ...handoffs.records.filter((record) => record.id !== saved.id)];
+    }
+    handoffs = { ...handoffs, saving: false };
+    closeModal();
+    render();
+    toast("Officer handoff saved.");
+  } catch (err) {
+    logSupabaseError("officer handoff save failed", err);
+    handoffs = { ...handoffs, saving: false, error: formatSupabaseError(err, "Officer handoff could not be saved.") };
+    render();
+    toast(formatSupabaseError(err, "Officer handoff could not be saved."));
+  }
+}
+
+async function acknowledgeOfficerHandoff(id, acknowledgement = "incoming") {
+  if (!id) return;
+  handoffs = { ...handoffs, saving: true, error: "" };
+  render();
+  try {
+    if (!cloud.client || !cloud.user) return toast("Sign in required.");
+    const { data, error } = await cloud.client.rpc("acknowledge_officer_handoff", { p_handoff_id: id, p_acknowledgement: acknowledgement });
+    if (error) throw error;
+    const saved = dbHandoffToClient(data || {});
+    handoffs.records = [saved, ...handoffs.records.filter((record) => record.id !== saved.id)];
+    handoffs = { ...handoffs, saving: false };
+    await loadOfficerHandoffs();
+    render();
+    toast("Handoff acknowledged.");
+  } catch (err) {
+    logSupabaseError("officer handoff acknowledgement failed", err);
+    handoffs = { ...handoffs, saving: false, error: formatSupabaseError(err, "Handoff acknowledgement failed.") };
+    render();
+    toast(formatSupabaseError(err, "Handoff acknowledgement failed."));
+  }
+}
+
 function beginImport(target) {
   const permission = target === "finance" ? "finance.import" : target === "members" ? "members.import" : target === "pnms" ? "recruitment.manage" : target === "events" ? "attendance.manage" : "backup.restore";
   if (!can(permission) && !can("all")) return toast("You do not have permission to import this data.");
@@ -4818,7 +5061,8 @@ function exportFileName(key) {
     "vpmd-packet": "ao-command-vpmd-brotherhood-packet",
     "brotherhood-events": "ao-command-brotherhood-events",
     "brotherhood-rsvps": "ao-command-brotherhood-rsvps",
-    "brotherhood-attendance": "ao-command-brotherhood-attendance"
+    "brotherhood-attendance": "ao-command-brotherhood-attendance",
+    "officer-handoffs": "ao-command-officer-handoffs"
   }[key] || `${key}-export`;
 }
 
@@ -4834,6 +5078,7 @@ function canExportKey(key) {
   if (key === "recruitment-packet") return can("reports.recruitment.view") || can("recruitment.manage") || can("all");
   if (key === "vpmd-packet") return can("reports.member_development.view") || can("members.update") || can("all");
   if (key.startsWith("brotherhood-")) return canViewBrotherhoodAdmin();
+  if (key === "officer-handoffs") return canViewHandoffs();
   if (key.endsWith("-packet")) return can("reports.export") || can("reports.executive.view") || can("reports.finance.view") || can("all");
   if (key === "reports") return can("reports.export") || can("all");
   if (key === "attendance") return can("attendance.view") || can("reports.export") || can("all");
@@ -4906,6 +5151,27 @@ function exportRows(key) {
         updatedAt: record.updatedAt || ""
       };
     });
+  }
+  if (key === "officer-handoffs") {
+    return handoffs.records.map((record) => ({
+      position: displayPosition(record.positionTitle),
+      status: record.status,
+      outgoingOfficer: memberName(record.outgoingMemberId) || "",
+      incomingOfficer: memberName(record.incomingMemberId) || "",
+      term: record.termLabel || "",
+      responsibilities: record.responsibilities || "",
+      recurringDuties: record.recurringDuties || "",
+      importantDates: record.importantDates || "",
+      currentProjects: record.currentProjects || "",
+      openTasks: record.openTasks || "",
+      keyContacts: record.keyContacts || "",
+      procedures: record.procedures || "",
+      lessonsLearned: record.lessonsLearned || "",
+      recommendations: record.recommendations || "",
+      incomingAcknowledgedAt: record.incomingAcknowledgedAt || "",
+      presidentAcknowledgedAt: record.presidentAcknowledgedAt || "",
+      updatedAt: record.updatedAt || ""
+    }));
   }
   if (key.endsWith("-packet")) return officerPacketRows(key);
   if (key === "finance" || key === "finance-filtered" || key === "finance-all") {
@@ -5004,7 +5270,10 @@ function officerPacketRows(key) {
       base("Summary", "Outstanding Dues", money(m.outstanding)),
       base("Summary", "Chapter Attendance Rate", m.attendanceRate),
       base("Summary", "Reports Awaiting Review", m.reportsAwaitingReview),
+      base("Summary", "Officer Handoffs Missing", m.handoffMissing),
       ...openTasks().filter((t) => t.dueDate && t.dueDate < todayIso()).map((t) => base("Overdue Officer Tasks", t.title, t.description || "", memberName(t.assignedMemberId) || t.assignedPerson || "", t.dueDate || "", t.status || "")),
+      ...handoffPositions().filter((position) => !handoffRecordForPosition(position)).map((position) => base("Officer Handoffs", displayPosition(position), "No transition record started", displayPosition(position), "", "Not started")),
+      ...handoffs.records.filter((record) => record.status === "Ready for review" && !record.presidentAcknowledgedAt).map((record) => base("Officer Handoffs", displayPosition(record.positionTitle), record.currentProjects || "Ready for President/Admin review", memberName(record.incomingMemberId) || "", "", record.status)),
       ...kpiReportsForMeeting(state.kpiMeetings[0]?.id || "").filter((r) => r.status !== "Submitted").map((r) => base("KPI Reports", displayPosition(r.position), r.status || "Draft", (r.officerMemberIds || [r.officerMemberId]).filter(Boolean).map(memberName).join(", "), "", r.status || "Draft"))
     ];
   }
