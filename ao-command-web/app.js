@@ -484,7 +484,7 @@ async function ensureOwnProfile(input = {}) {
       email: cloud.user.email,
       full_name: input.fullName || meta.full_name || "",
       requested_role: input.requestedRole || meta.requested_role || "Active Member",
-      role: "Active Member",
+      role: "member",
       approval_status: "pending",
       request_notes: input.requestNotes || meta.request_notes || ""
     };
@@ -505,7 +505,7 @@ async function ensureOwnProfile(input = {}) {
     || null;
   cloud.currentMembership = membership || null;
   if (toDbRole(membership?.role) === "admin" && cloud.profile.approval_status !== "approved") {
-    const { data: updated, error: updateError } = await cloud.client.from("profiles").update({ approval_status: "approved", role: "Admin", updated_at: new Date().toISOString() }).eq("id", cloud.user.id).select("*").single();
+    const { data: updated, error: updateError } = await cloud.client.from("profiles").update({ approval_status: "approved", role: "admin", updated_at: new Date().toISOString() }).eq("id", cloud.user.id).select("*").single();
     if (!updateError && updated) cloud.profile = updated;
   }
   if (cloud.profile?.approval_status === "approved" && membership?.role && displayRoleForProfile(cloud.profile, membership) !== displayRoleForProfile({ role: cloud.profile.role }, {})) {
@@ -2955,7 +2955,8 @@ async function updateUserAccess(action, userId, role, memberId = "") {
   if (!permissionRoles.includes(selectedRole)) return toast("Choose a valid role before saving.");
   const status = action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "disable" ? "disabled" : target.approval_status || "pending";
   if (action !== "role" && !confirm(`${labelize(action)} ${target.email}?`)) return;
-  const profilePatch = { approval_status: status, role: selectedRole, updated_at: new Date().toISOString() };
+  const dbRole = toDbRole(selectedRole);
+  const profilePatch = { approval_status: status, role: dbRole, updated_at: new Date().toISOString() };
   const { data: updatedProfile, error: profileError } = await cloud.client.from("profiles").update(profilePatch).eq("id", userId).select("*").single();
   if (profileError) {
     logSupabaseError("user profile role update failed", profileError);
@@ -2963,7 +2964,6 @@ async function updateUserAccess(action, userId, role, memberId = "") {
   }
   if (status === "approved") {
     const organizationId = await ensureCloudWorkspace();
-    const dbRole = toDbRole(selectedRole);
     const { data: existing, error: existingError } = await cloud.client
       .from("organization_members")
       .select("id")
