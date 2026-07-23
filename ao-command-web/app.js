@@ -2956,14 +2956,15 @@ async function updateUserAccess(action, userId, role, memberId = "") {
   const status = action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "disable" ? "disabled" : target.approval_status || "pending";
   if (action !== "role" && !confirm(`${labelize(action)} ${target.email}?`)) return;
   const dbRole = toDbRole(selectedRole);
-  const profilePatch = { approval_status: status, role: dbRole, updated_at: new Date().toISOString() };
-  const { data: updatedProfile, error: profileError } = await cloud.client.from("profiles").update(profilePatch).eq("id", userId).select("*").single();
-  if (profileError) {
-    logSupabaseError("user profile role update failed", profileError);
-    return toast(formatSupabaseError(profileError, "Role could not be saved."));
-  }
+  let organizationId = cloud.organizationId || "";
+  let existingMembership = null;
   if (status === "approved") {
-    const organizationId = await ensureCloudWorkspace();
+    try {
+      organizationId = await ensureCloudWorkspace();
+    } catch (err) {
+      logSupabaseError("user membership workspace lookup failed", err);
+      return toast(formatSupabaseError(err, "Role could not be saved because the chapter workspace could not be confirmed."));
+    }
     const { data: existing, error: existingError } = await cloud.client
       .from("organization_members")
       .select("id")
@@ -2972,21 +2973,33 @@ async function updateUserAccess(action, userId, role, memberId = "") {
       .maybeSingle();
     if (existingError) {
       logSupabaseError("user membership lookup failed", existingError);
-      return toast(formatSupabaseError(existingError, "Role was saved, but membership could not be checked."));
+      return toast(formatSupabaseError(existingError, "Role could not be saved because membership could not be checked."));
     }
-    if (existing?.id) {
-      const { error } = await cloud.client.from("organization_members").update({ role: dbRole, email: target.email, member_id: memberId || null, status: "active", updated_at: new Date().toISOString() }).eq("id", existing.id);
+    existingMembership = existing || null;
+    if (existingMembership?.id) {
+      const { error } = await cloud.client
+        .from("organization_members")
+        .update({ role: dbRole, email: target.email, member_id: memberId || null, status: "active", updated_at: new Date().toISOString() })
+        .eq("id", existingMembership.id);
       if (error) {
         logSupabaseError("user membership role update failed", error);
-        return toast(formatSupabaseError(error, "Role was saved, but chapter access could not be updated."));
+        return toast(formatSupabaseError(error, "Role could not be saved because chapter access could not be updated."));
       }
     } else {
-      const { error } = await cloud.client.from("organization_members").insert({ organization_id: organizationId, user_id: userId, email: target.email, role: dbRole, member_id: memberId || null, status: "active" });
+      const { error } = await cloud.client
+        .from("organization_members")
+        .insert({ organization_id: organizationId, user_id: userId, email: target.email, role: dbRole, member_id: memberId || null, status: "active" });
       if (error) {
         logSupabaseError("user membership role insert failed", error);
-        return toast(formatSupabaseError(error, "Role was saved, but chapter access could not be created."));
+        return toast(formatSupabaseError(error, "Role could not be saved because chapter access could not be created."));
       }
     }
+  }
+  const profilePatch = { approval_status: status, role: dbRole, updated_at: new Date().toISOString() };
+  const { data: updatedProfile, error: profileError } = await cloud.client.from("profiles").update(profilePatch).eq("id", userId).select("*").single();
+  if (profileError) {
+    logSupabaseError("user profile role update failed", profileError);
+    return toast(formatSupabaseError(profileError, "Role could not be saved."));
   }
   if (userId === cloud.user?.id && updatedProfile) cloud.profile = updatedProfile;
   await loadProfilesForAdmin();
