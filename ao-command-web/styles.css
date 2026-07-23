@@ -52,12 +52,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .nav-section { display: grid; gap: 5px; }
 .nav-section-label {
   margin: 8px 0 2px;
+  padding: 5px 3px;
   color: #8fb3d9;
+  background: transparent;
+  text-align: left;
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  border-radius: 9px;
 }
+.nav-section-label:hover, .nav-section-label:focus-visible { color: white; background: rgba(255,255,255,0.08); }
 .nav-section:not(.open) .nav-section-label {
   color: rgba(203,213,225,0.62);
 }

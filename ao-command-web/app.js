@@ -1422,11 +1422,15 @@ function refreshNavigation() {
     if (!sectionItems.length) return "";
     const open = section.label === activeSection;
     return `<section class="nav-section ${open ? "open" : ""}">
-      <p class="nav-section-label">${safe(section.label)}</p>
+      <button class="nav-section-label" data-nav-section="${safe(sectionItems[0].view)}" aria-expanded="${open ? "true" : "false"}">${safe(section.label)}</button>
       <div class="nav-section-items">${open ? sectionItems.map((item) => `<button class="nav-item ${item.view === activeView ? "active" : ""}" data-view="${safe(item.view)}">${safe(item.label)}</button>`).join("") : ""}</div>
     </section>`;
   }).join("");
   nav.querySelectorAll(".nav-item").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+  nav.querySelectorAll("[data-nav-section]").forEach((b) => b.addEventListener("click", () => {
+    if (b.getAttribute("aria-expanded") === "true") return;
+    setView(b.dataset.navSection);
+  }));
 }
 
 function routeAllowed(view = activeView) {
