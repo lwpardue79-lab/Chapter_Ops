@@ -17,6 +17,7 @@ const setupDebug = (...args) => console.info("[AO Command setup]", ...args);
 
 const viewNames = {
   dashboard: "Command Center",
+  alerts: "Command Alerts",
   members: "Member Directory",
   leadership: "Leadership",
   recruitment: "Recruitment Pipeline",
@@ -57,6 +58,7 @@ const legacyPermissionMap = {
 };
 const navigationItems = [
   { view: "dashboard", label: "Command Center", permission: "dashboard.executive.view" },
+  { view: "alerts", label: "Command Alerts", permission: "dashboard.executive.view" },
   { view: "members", label: "Member Directory", permission: "members.list.view" },
   { view: "leadership", label: "Leadership", permission: "officers.view" },
   { view: "recruitment", label: "Recruitment Pipeline", permission: "recruitment.view" },
@@ -959,6 +961,7 @@ function render() {
   }
   root.innerHTML = ({
     dashboard: renderDashboard,
+    alerts: renderCommandAlertsPage,
     members: () => renderCollection("members"),
     recruitment: () => renderCollection("pnms"),
     events: () => renderCollection("events"),
@@ -1276,6 +1279,7 @@ function renderDashboard() {
     ])}
     ${needsSetup ? renderSetupPrompt() : ""}
     ${alerts.length ? renderCommandAlerts(alerts) : ""}
+    ${renderRoleHomeSpotlight(m)}
     <div class="kpi-grid">
       ${metricCard("Active Members", m.members, "members")}
       ${metricCard("Outstanding Dues", money(m.outstanding), "finance", "outstanding=true")}
@@ -1320,6 +1324,118 @@ function renderDashboard() {
         <button class="action-tile" data-add="tasks">Create task</button>
       </div>
     </section>`;
+}
+
+function commandAlertRows() {
+  const rows = [];
+  const add = (category, title, detail, view, owner = "", dueDate = "", status = "", priority = "Medium") => rows.push({ category, title, detail, view, owner, dueDate, status, priority });
+  financeLedgerRows("all").filter((row) => row.totalBalanceCents > 0 && row.dueDate && row.dueDate < todayIso()).forEach((row) => {
+    add("Finance", `${row.firstName} ${row.lastName} is past due`, `${moneyFromCents(row.totalBalanceCents)} outstanding`, "finance", "Treasurer", row.dueDate, row.paymentPlanStatus || "Outstanding", "High");
+  });
+  financeLedgerRows("all").filter((row) => row.paymentPlanStatus && row.paymentPlanStatus !== "None").forEach((row) => {
+    add("Finance", `${row.firstName} ${row.lastName} has a payment plan`, `${moneyFromCents(row.totalBalanceCents)} balance`, "finance", "Treasurer", row.dueDate || "", row.paymentPlanStatus, "Medium");
+  });
+  openTasks().filter((t) => t.dueDate && t.dueDate < todayIso()).forEach((t) => {
+    add("Tasks", t.title || "Overdue task", t.description || "", "tasks", memberName(t.assignedMemberId) || t.assignedPerson || "", t.dueDate, t.status || "Open", "High");
+  });
+  openTasks().filter((t) => t.dueDate && t.dueDate >= todayIso()).sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate))).slice(0, 10).forEach((t) => {
+    add("Deadlines", t.title || "Upcoming task", t.description || "", "tasks", memberName(t.assignedMemberId) || t.assignedPerson || "", t.dueDate, t.status || "Open", "Medium");
+  });
+  activePnms().filter((p) => p.followUpDate && p.followUpDate <= todayIso()).forEach((p) => {
+    add("Recruitment", `${pnmName(p.id)} needs follow-up`, p.status || "", "recruitment", p.assignedRecruiter || p.assignedBrother || "", p.followUpDate, "Due", "High");
+  });
+  state.events.filter((event) => !event.archived && event.date && event.date <= todayIso() && !state.attendance.some((a) => a.eventId === event.id)).forEach((event) => {
+    add("Attendance", `${event.name || event.eventName || "Event"} is missing attendance`, event.type || event.eventType || event.event_category || "", "events", "Secretary", event.date, "Needs record", "High");
+  });
+  kpiReportsForMeeting(state.kpiMeetings[0]?.id || "").filter((r) => r.status !== "Submitted").forEach((report) => {
+    add("KPI Reports", `${displayPosition(report.position)} report not submitted`, report.overallUpdate || "", "kpis", (report.officerMemberIds || [report.officerMemberId]).filter(Boolean).map(memberName).join(", "), "", report.status || "Draft", "Medium");
+  });
+  return rows;
+}
+
+function renderCommandAlertsPage() {
+  const rows = commandAlertRows();
+  const filter = activeFilters.alerts || {};
+  const q = String(filter.q || "").toLowerCase();
+  const category = filter.category || "All";
+  const categories = ["All", ...new Set(rows.map((row) => row.category))];
+  const filtered = rows.filter((row) => (category === "All" || row.category === category) && (!q || Object.values(row).join(" ").toLowerCase().includes(q)));
+  return `${renderPageHeader("Command Alerts", "A focused action list for dues, attendance, tasks, recruitment, KPI reports, and upcoming deadlines.", [
+    ["Export Alerts", "ghost", "export:command-alerts"],
+    ["Print / PDF", "primary", "print"]
+  ])}
+  <section class="panel alerts-workspace">
+    <div class="panel-head">
+      <div><h3>Action queue</h3><p class="muted">${filtered.length} of ${rows.length} items shown.</p></div>
+      <div class="button-row"><input class="search" id="alertSearch" placeholder="Search alerts" value="${safe(filter.q || "")}" /></div>
+    </div>
+    <div class="status-strip">${categories.map((cat) => `<button class="${category === cat ? "active" : ""}" data-alert-category="${safe(cat)}">${safe(cat)}<strong>${cat === "All" ? rows.length : rows.filter((row) => row.category === cat).length}</strong></button>`).join("")}</div>
+    ${filtered.length ? `<div class="alert-list">${filtered.map(renderAlertRow).join("")}</div>` : `<div class="empty-state"><h3>No command alerts</h3><p>Alerts will appear here when dues, attendance, tasks, recruitment, or KPI reports need attention.</p></div>`}
+  </section>`;
+}
+
+function renderAlertRow(row) {
+  return `<article class="alert-row ${row.priority === "High" ? "high" : ""}">
+    <div><span class="status-pill">${safe(row.category)}</span><h4>${safe(row.title)}</h4><p>${safe(row.detail || "No additional detail.")}</p></div>
+    <div class="alert-meta">
+      <span><strong>Owner</strong>${safe(row.owner || "—")}</span>
+      <span><strong>Due</strong>${safe(row.dueDate || "—")}</span>
+      <span><strong>Status</strong>${safe(row.status || "Open")}</span>
+      <button class="ghost small" data-go="${safe(row.view)}">Open</button>
+    </div>
+  </article>`;
+}
+
+function renderRoleHomeSpotlight(m) {
+  const role = resolvedRole();
+  if (["Treasurer", "Assistant Treasurer"].includes(role)) {
+    return roleHomePanel("Treasurer workspace", "Dues collection, balances, payment plans, and exports.", [
+      ["Total outstanding", money(m.outstanding), "finance"],
+      ["Past due members", m.pastDue, "finance"],
+      ["Payment plans", m.plans, "finance"],
+      ["Recent payments", financeRows().filter((f) => f.type === "Payment").length, "reports"]
+    ], [["Record Payment", "primary", "finance"], ["Export Treasurer Packet", "ghost", "export:treasurer-packet"]]);
+  }
+  if (role === "Secretary") {
+    return roleHomePanel("Secretary workspace", "Attendance sessions, missing records, and roster updates.", [
+      ["Missing attendance", m.missingAttendance, "events"],
+      ["Attendance rate", m.attendanceRate, "events"],
+      ["Open tasks", openTasks().length, "tasks"],
+      ["Roster size", m.members, "members"]
+    ], [["Start Attendance", "primary", "attendance-start"], ["Export Secretary Packet", "ghost", "export:secretary-packet"]]);
+  }
+  if (role === "Recruitment") {
+    return roleHomePanel("Recruitment workspace", "PNM follow-ups, pipeline movement, and bid outcomes.", [
+      ["Active PNMs", m.pnms, "recruitment"],
+      ["Follow-ups due", m.pnmFollowUps, "recruitment"],
+      ["Bids accepted", m.bidsAccepted, "recruitment"],
+      ["Acceptance rate", m.acceptanceRate, "reports"]
+    ], [["Add PNM", "primary", "pnms:add"], ["Export Recruitment Packet", "ghost", "export:recruitment-packet"]]);
+  }
+  if (role === "VPMD") {
+    return roleHomePanel("VPMD · Brotherhood workspace", "Member engagement, follow-ups, and brotherhood programming.", [
+      ["Active members", m.members, "members"],
+      ["New members", m.newMembers, "members"],
+      ["Attendance rate", m.attendanceRate, "events"],
+      ["Open tasks", m.tasks, "tasks"]
+    ], [["Create Task", "primary", "tasks:add"], ["Export VPMD Packet", "ghost", "export:vpmd-packet"]]);
+  }
+  if (role === "President" || role === "Admin") {
+    return roleHomePanel("Executive command view", "The fastest path to chapter priorities and officer accountability.", [
+      ["Reports awaiting review", m.reportsAwaitingReview, "kpis"],
+      ["Overdue officer tasks", openTasks().filter((t) => t.dueDate && t.dueDate < todayIso()).length, "tasks"],
+      ["Outstanding dues", money(m.outstanding), "finance"],
+      ["Command alerts", commandAlertRows().length, "alerts"]
+    ], [["Open Alerts", "primary", "alerts"], ["Export President Packet", "ghost", "export:president-packet"]]);
+  }
+  return "";
+}
+
+function roleHomePanel(title, subtitle, cards, actions) {
+  return `<section class="panel role-home-panel">
+    <div class="panel-head"><div><h3>${safe(title)}</h3><p class="muted">${safe(subtitle)}</p></div><div class="button-row">${actions.map(([label, style, target]) => renderHeaderAction(label, style, target)).join("")}</div></div>
+    <div class="mini-grid">${cards.map(([label, value, view]) => mini(label, value, view)).join("")}</div>
+  </section>`;
 }
 
 function renderSetupPrompt() {
@@ -1502,8 +1618,29 @@ function renderFinanceLedger() {
     </div>
     ${renderFinanceTotals("Filtered totals", filteredTotals)}
     ${renderFinanceTotals("Full chapter totals", fullTotals)}
+    ${renderTreasurerWorkflowPanel(allRows)}
     <div class="status-strip finance-filters">${quickFilters.map(([value, label]) => `<button class="${(filter.quick || "all") === value ? "active" : ""}" data-finance-filter="${value}">${safe(label)}<strong>${value === "all" ? allRows.length : quickFilterCount(value, allRows)}</strong></button>`).join("")}</div>
     ${filtered.length ? renderFinanceLedgerTable(filtered) : renderFinanceEmptyState()}
+  </section>`;
+}
+
+function renderTreasurerWorkflowPanel(rows) {
+  const pastDue = rows.filter((row) => row.totalBalanceCents > 0 && row.dueDate && row.dueDate < todayIso()).length;
+  const dueSoon = rows.filter((row) => row.totalBalanceCents > 0 && row.dueDate && row.dueDate >= todayIso()).sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate))).slice(0, 8);
+  const paymentPlans = rows.filter((row) => row.paymentPlanStatus && row.paymentPlanStatus !== "None").length;
+  const recentPayments = financeRows().filter((f) => f.type === "Payment").sort((a, b) => String(b.paymentDate || b.createdAt || "").localeCompare(String(a.paymentDate || a.createdAt || ""))).slice(0, 6);
+  return `<section class="treasurer-workflow">
+    <div class="section-head"><h4>Treasurer workflow</h4><p>Fast views for collection work, statements, payment plans, and recent activity.</p></div>
+    <div class="treasurer-workflow-grid">
+      <button class="workflow-card" data-finance-filter="overdue"><span>Collect first</span><strong>${safe(pastDue)}</strong><em>Past-due members</em></button>
+      <button class="workflow-card" data-finance-filter="plans"><span>Review plans</span><strong>${safe(paymentPlans)}</strong><em>Members on payment plans</em></button>
+      <button class="workflow-card" data-export="treasurer-packet"><span>Meeting ready</span><strong>CSV</strong><em>Treasurer packet</em></button>
+      <button class="workflow-card" data-print-packet="treasurer-packet"><span>Printable</span><strong>PDF</strong><em>Statement-style packet</em></button>
+    </div>
+    <div class="two-col treasurer-lists">
+      ${listPanel("Upcoming due dates", dueSoon.map((row) => `${safe(row.lastName)}, ${safe(row.firstName)} · ${moneyFromCents(row.totalBalanceCents)}<span>Due ${safe(row.dueDate || "not set")}</span>`), "finance")}
+      ${listPanel("Recent payments", recentPayments.map((payment) => `${safe(memberName(payment.memberId))} · ${money(payment.amount)}<span>${safe(payment.paymentDate || payment.createdAt || "")}</span>`), "reports")}
+    </div>
   </section>`;
 }
 
@@ -1904,7 +2041,7 @@ function renderOfficerReportPackets() {
   return `<section class="report-packets">
     <div class="section-head"><h4>Officer report packets</h4><p>Export focused CSV packets for recurring officer meetings.</p></div>
     <div class="report-packet-grid">
-      ${packets.map(([title, body, key]) => `<article class="report-packet-card"><div><strong>${safe(title)}</strong><span>${safe(body)}</span></div><button class="ghost small" data-export="${safe(key)}">Export CSV</button></article>`).join("")}
+      ${packets.map(([title, body, key]) => `<article class="report-packet-card"><div><strong>${safe(title)}</strong><span>${safe(body)}</span></div><div class="button-row"><button class="ghost small" data-export="${safe(key)}">Export CSV</button><button class="ghost small" data-print-packet="${safe(key)}">Preview / Print</button></div></article>`).join("")}
     </div>
   </section>`;
 }
@@ -2424,6 +2561,9 @@ function bindViewActions(root) {
   root.querySelectorAll("[data-delete]").forEach((el) => el.addEventListener("click", async (ev) => { ev.stopPropagation(); const [key, id] = el.dataset.delete.split(":"); await deleteRow(key, id); }));
   root.querySelectorAll("[data-open]").forEach((el) => el.addEventListener("click", (ev) => { if (ev.target.closest(".row-actions, [data-edit-leadership], [data-edit], [data-archive], [data-delete]")) return; openProfile(el.dataset.open, el.dataset.id); }));
   root.querySelectorAll("[data-export]").forEach((el) => el.addEventListener("click", () => exportCsv(el.dataset.export)));
+  root.querySelectorAll("[data-print-packet]").forEach((el) => el.addEventListener("click", () => openPrintablePacket(el.dataset.printPacket)));
+  root.querySelectorAll("[data-alert-category]").forEach((el) => el.addEventListener("click", () => { activeFilters.alerts = { ...(activeFilters.alerts || {}), category: el.dataset.alertCategory }; render(); }));
+  root.querySelector("#alertSearch")?.addEventListener("input", (ev) => { activeFilters.alerts = { ...(activeFilters.alerts || {}), q: ev.target.value }; render(); });
   root.querySelectorAll("[data-import]").forEach((el) => el.addEventListener("click", () => beginImport(el.dataset.import)));
   root.querySelectorAll("[data-finance-template]").forEach((el) => el.addEventListener("click", downloadFinanceTemplate));
   root.querySelectorAll("[data-finance-filter]").forEach((el) => el.addEventListener("click", () => { activeFilters.finance = { ...(activeFilters.finance || {}), quick: el.dataset.financeFilter === "all" ? "" : el.dataset.financeFilter }; render(); }));
@@ -3702,12 +3842,24 @@ function exportCsv(key) {
   const rows = exportRows(key);
   const headers = Object.keys(rows[0] || { empty: "" });
   const csv = [headers.join(","), ...rows.map((r) => headers.map((h) => `"${String(r[h] ?? "").replaceAll('"', '""')}"`).join(","))].join("\n");
-  download(`${key}-export.csv`, csv, "text/csv");
+  download(`${exportFileName(key)}.csv`, csv, "text/csv");
+}
+
+function exportFileName(key) {
+  return {
+    "command-alerts": "ao-command-alerts",
+    "president-packet": "ao-command-president-packet",
+    "treasurer-packet": "ao-command-treasurer-packet",
+    "secretary-packet": "ao-command-secretary-packet",
+    "recruitment-packet": "ao-command-recruitment-packet",
+    "vpmd-packet": "ao-command-vpmd-brotherhood-packet"
+  }[key] || `${key}-export`;
 }
 
 function canExportKey(key) {
   if (key.startsWith("finance") || key === "outstanding") return can("finance.export") || can("reports.finance.view") || can("all");
   if (key === "attendance-checklist") return can("attendance.view") || can("reports.export") || can("all");
+  if (key === "command-alerts") return can("dashboard.executive.view") || can("reports.executive.view") || can("all");
   if (key === "members") return can("members.export") || can("all");
   if (key === "kpis") return can("reports.export") || can("kpi.view") || can("all");
   if (key.endsWith("-packet")) return can("reports.export") || can("reports.executive.view") || can("reports.finance.view") || can("all");
@@ -3717,6 +3869,7 @@ function canExportKey(key) {
 }
 
 function exportRows(key) {
+  if (key === "command-alerts") return commandAlertRows();
   if (key.endsWith("-packet")) return officerPacketRows(key);
   if (key === "finance" || key === "finance-filtered" || key === "finance-all") {
     const rows = financeLedgerRows(key === "finance-all" ? "all" : "filtered");
@@ -3858,6 +4011,34 @@ function officerPacketRows(key) {
     ];
   }
   return [base("Summary", "No packet rows available", "")];
+}
+
+function openPrintablePacket(key) {
+  if (!canExportKey(key)) return toast("You do not have permission to view this packet.");
+  const rows = officerPacketRows(key);
+  const packetTitle = rows[0]?.packet || "Officer Packet";
+  const grouped = rows.reduce((map, row) => {
+    const section = row.section || "Summary";
+    if (!map.has(section)) map.set(section, []);
+    map.get(section).push(row);
+    return map;
+  }, new Map());
+  openModal(`<section class="print-packet">
+    <div class="packet-header">
+      <p class="eyebrow">AO Command</p>
+      <h3>${safe(packetTitle)}</h3>
+      <p class="muted">Generated ${safe(new Date().toLocaleString())}</p>
+    </div>
+    ${[...grouped.entries()].map(([section, items]) => `<section class="packet-section">
+      <h4>${safe(section)}</h4>
+      <div class="table-wrap"><table><thead><tr><th>Item</th><th>Value</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>
+        ${items.map((item) => `<tr><td data-label="Item">${safe(item.item || "")}</td><td data-label="Value">${safe(item.value || item.detail || "")}</td><td data-label="Owner">${safe(item.owner || "")}</td><td data-label="Due">${safe(item.dueDate || "")}</td><td data-label="Status">${safe(item.status || "")}</td></tr>`).join("")}
+      </tbody></table></div>
+    </section>`).join("")}
+    <div class="button-row"><button class="primary" data-print>Print / Save PDF</button><button class="ghost" data-export="${safe(key)}">Export CSV</button><button class="ghost" data-close-modal>Close</button></div>
+  </section>`);
+  document.querySelector("#modal [data-print]")?.addEventListener("click", () => window.print());
+  document.querySelector("#modal [data-export]")?.addEventListener("click", (ev) => exportCsv(ev.currentTarget.dataset.export));
 }
 
 function downloadFinanceTemplate() {
