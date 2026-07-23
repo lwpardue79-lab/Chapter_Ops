@@ -41,7 +41,6 @@ Roles:
 - VPMD
 - Recruitment
 - Exec Board
-- Committee Chair
 - Active Member
 - Read-only Advisor
 
@@ -72,6 +71,7 @@ VPMD and Brotherhood are treated as one canonical role area. Recruitment remains
 - `reports.executive.view`
 - `reports.finance.view`
 - `reports.export`
+- `view_kpi_meetings`
 - `kpi.view`
 - `kpi.submit_own`
 - `kpi.manage_all`

@@ -32,19 +32,18 @@ const viewNames = {
   portal: "Member Portal"
 };
 
-const permissionRoles = ["Admin", "President", "Treasurer", "Assistant Treasurer", "Secretary", "VPMD", "Recruitment", "Exec Board", "Committee Chair", "Active Member", "Read-only Advisor"];
+const permissionRoles = ["Admin", "President", "Treasurer", "Assistant Treasurer", "Secretary", "VPMD", "Recruitment", "Exec Board", "Active Member", "Read-only Advisor"];
 const roleRules = {
   Admin: ["all"],
-  President: ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.archive", "members.import", "members.export", "officers.view", "officers.manage", "handoffs.view", "handoffs.manage", "handoffs.access", "events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "recruitment.view", "recruitment.manage", "attendance.view", "attendance.manage", "finance.summary.view", "finance.member_balances.view", "reports.executive.view", "reports.finance.view", "reports.export", "kpi.view", "kpi.manage_all", "tasks.view_all", "tasks.manage", "settings.view", "backup.create"],
-  Treasurer: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  "Assistant Treasurer": ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  Secretary: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.import", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "attendance.view", "attendance.manage", "reports.attendance.view", "reports.export", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  VPMD: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.update", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "attendance.view", "reports.member_development.view", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
-  Recruitment: ["dashboard.role.view", "members.list.view", "handoffs.manage_own", "handoffs.access", "recruitment.view", "recruitment.manage", "reports.recruitment.view", "kpi.view", "kpi.submit_own"],
-  "Exec Board": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.export", "officers.view", "handoffs.view", "handoffs.access", "events.view", "brotherhood.events.admin.view", "recruitment.view", "attendance.view", "reports.executive.view", "kpi.view", "kpi.submit_own", "tasks.view_all"],
-  "Committee Chair": ["workspace.full.read", "dashboard.role.view", "members.list.view", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "attendance.view", "attendance.manage", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  President: ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.archive", "members.import", "members.export", "officers.view", "officers.manage", "handoffs.view", "handoffs.manage", "handoffs.access", "events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "recruitment.view", "recruitment.manage", "attendance.view", "attendance.manage", "finance.summary.view", "finance.member_balances.view", "reports.executive.view", "reports.finance.view", "reports.export", "view_kpi_meetings", "kpi.view", "kpi.manage_all", "tasks.view_all", "tasks.manage", "settings.view", "backup.create"],
+  Treasurer: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "view_kpi_meetings", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  "Assistant Treasurer": ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "finance.summary.view", "finance.member_balances.view", "finance.manage", "finance.import", "finance.export", "reports.finance.view", "reports.export", "tasks.view_all", "tasks.manage"],
+  Secretary: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.create", "members.update", "members.import", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "attendance.view", "attendance.manage", "reports.attendance.view", "reports.export", "view_kpi_meetings", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  VPMD: ["workspace.full.read", "dashboard.role.view", "members.list.view", "members.private_contact.view", "members.update", "members.export", "handoffs.manage_own", "handoffs.access", "events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "attendance.view", "reports.member_development.view", "view_kpi_meetings", "kpi.view", "kpi.submit_own", "tasks.view_all", "tasks.manage"],
+  Recruitment: ["dashboard.role.view", "members.list.view", "handoffs.manage_own", "handoffs.access", "recruitment.view", "recruitment.manage", "reports.recruitment.view", "view_kpi_meetings", "kpi.view", "kpi.submit_own"],
+  "Exec Board": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "members.private_contact.view", "members.export", "officers.view", "handoffs.view", "handoffs.access", "events.view", "brotherhood.events.admin.view", "recruitment.view", "attendance.view", "reports.executive.view", "view_kpi_meetings", "kpi.view", "kpi.submit_own", "tasks.view_all"],
   "Active Member": ["member.portal.view", "members.self.view", "finance.self.view", "attendance.self.view", "events.member.view", "events.rsvp", "tasks.view_own"],
-  "Read-only Advisor": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "officers.view", "handoffs.view", "handoffs.access", "events.view", "brotherhood.events.admin.view", "attendance.view", "reports.executive.view", "reports.finance.view", "kpi.view"]
+  "Read-only Advisor": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "officers.view", "handoffs.view", "handoffs.access", "events.view", "brotherhood.events.admin.view", "attendance.view", "reports.executive.view", "reports.finance.view", "view_kpi_meetings", "kpi.view"]
 };
 const legacyPermissionMap = {
   view_all: "members.list.view",
@@ -68,7 +67,7 @@ const navigationItems = [
   { view: "recruitment", label: "Recruitment Pipeline", permission: "recruitment.view" },
   { view: "events", label: "Events & Attendance", permission: "attendance.view" },
   { view: "finance", label: "Financial Operations", permission: "finance.member_balances.view" },
-  { view: "kpis", label: "KPI Reports", permission: "kpi.view" },
+  { view: "kpis", label: "KPI Reports", permission: "view_kpi_meetings" },
   { view: "tasks", label: "Action Center", permission: "tasks.view_all" },
   { view: "reports", label: "Reports & Analytics", permission: "reports.executive.view" },
   { view: "settings", label: "Administration", permission: "settings.view" }
@@ -154,7 +153,7 @@ function normalizeAppRole(role = "") {
   if (["vpmd", "brotherhood", "membership development", "vp membership development", "vice president of membership development"].some((v) => key.includes(v))) return "VPMD";
   if (key.includes("recruitment") || key.includes("rush")) return "Recruitment";
   if (key.includes("exec")) return "Exec Board";
-  if (key.includes("committee")) return "Committee Chair";
+  if (key.includes("committee")) return "Active Member";
   if (key.includes("advisor")) return "Read-only Advisor";
   return "Active Member";
 }
@@ -169,6 +168,7 @@ const can = (permission) => {
   const permissions = permissionsForRole();
   return permissions.has("all") || permissions.has(resolved);
 };
+const canViewKpiMeetings = () => can("view_kpi_meetings");
 const canManage = (area) => can(`manage_${area}`);
 const canAny = (permissions = []) => permissions.some(can);
 const isFullWorkspaceAllowed = () => can("workspace.full.read") || can("all");
@@ -184,7 +184,7 @@ function toDbRole(role = "") {
   if (key.includes("vpmd") || key.includes("brotherhood")) return "vpmd";
   if (key.includes("recruitment") || key.includes("rush")) return "recruitment";
   if (key.includes("exec")) return "executive";
-  if (key.includes("committee")) return "committee_chair";
+  if (key.includes("committee")) return "member";
   if (key.includes("advisor")) return "advisor";
   return "member";
 }
@@ -200,7 +200,7 @@ function fromDbRole(role = "") {
   if (["vpmd", "brotherhood", "membership development"].some((v) => key.includes(v))) return "VPMD";
   if (key.includes("recruitment") || key.includes("rush")) return "Recruitment";
   if (key === "executive" || key.includes("exec")) return "Exec Board";
-  if (key === "committee chair" || key.includes("committee")) return "Committee Chair";
+  if (key === "committee chair" || key.includes("committee")) return "Active Member";
   if (key === "advisor" || key.includes("advisor")) return "Read-only Advisor";
   if (key === "member" || key.includes("active member")) return "Active Member";
   return normalizeAppRole(role);
@@ -605,7 +605,7 @@ async function loadCloudWorkspace(options = {}) {
     const organizationId = await ensureCloudWorkspace();
     const { data, error } = await cloud.client.from("workspace_state").select("*").eq("organization_id", organizationId).maybeSingle();
     if (error) throw error;
-    if (data?.data || data?.state) state = normalize(data.data || data.state);
+    if (data?.data || data?.state) state = sanitizeStateForCurrentRole(normalize(data.data || data.state));
     else await syncCloudWorkspace(false);
     save();
   } catch (err) {
@@ -615,11 +615,37 @@ async function loadCloudWorkspace(options = {}) {
   }
 }
 
+function sanitizeStateForCurrentRole(nextState) {
+  if (canViewKpiMeetings()) return nextState;
+  return {
+    ...nextState,
+    kpiMeetings: [],
+    kpiDefinitions: [],
+    kpiPositionReports: [],
+    kpiResults: [],
+    kpiActionItems: []
+  };
+}
+
 async function syncCloudWorkspace(showToast = true) {
   try {
     const organizationId = await ensureCloudWorkspace();
     state = normalize(state);
-    const { error } = await cloud.client.from("workspace_state").upsert({ organization_id: organizationId, data: state, updated_by: cloud.user.id, updated_at: new Date().toISOString() }, { onConflict: "organization_id" });
+    let dataToSave = state;
+    if (!canViewKpiMeetings()) {
+      const { data: existing, error: existingError } = await cloud.client.from("workspace_state").select("data").eq("organization_id", organizationId).maybeSingle();
+      if (existingError) throw existingError;
+      const existingState = existing?.data ? normalize(existing.data) : {};
+      dataToSave = {
+        ...state,
+        kpiMeetings: existingState.kpiMeetings || [],
+        kpiDefinitions: existingState.kpiDefinitions || [],
+        kpiPositionReports: existingState.kpiPositionReports || [],
+        kpiResults: existingState.kpiResults || [],
+        kpiActionItems: existingState.kpiActionItems || []
+      };
+    }
+    const { error } = await cloud.client.from("workspace_state").upsert({ organization_id: organizationId, data: dataToSave, updated_by: cloud.user.id, updated_at: new Date().toISOString() }, { onConflict: "organization_id" });
     if (error) throw error;
     if (showToast) toast("Changes synced.");
   } catch (err) {
@@ -786,7 +812,7 @@ function metrics() {
   const bidsAccepted = state.pnms.filter((p) => p.status === "Accepted" || p.bidAcceptedDate).length;
   const attendanceRecords = state.attendance.filter((a) => a.personType === "Member" || a.memberId || a.personId);
   const attendedRecords = attendanceRecords.filter((a) => ["Present", "Late", "Excused", "present", "late", "excused"].includes(a.status));
-  const reportSummary = state.kpiMeetings?.length ? kpiMeetingSummary(state.kpiMeetings[0].id) : { missingReports: 0 };
+  const reportSummary = canViewKpiMeetings() && state.kpiMeetings?.length ? kpiMeetingSummary(state.kpiMeetings[0].id) : { missingReports: 0 };
   const expenseTotal = financeRows().filter((f) => ["Expense", "Reimbursement", "Refund"].includes(f.type)).reduce((s, f) => s + parseMoney(f.amount), 0);
   const handoffMissing = handoffPositions().filter((position) => !handoffRecordForPosition(position)).length;
   return {
@@ -1987,9 +2013,11 @@ function commandAlertRows() {
   handoffs.records.filter((record) => record.status === "Ready for review" && !record.presidentAcknowledgedAt).forEach((record) => {
     add("Officer Handoffs", `${displayPosition(record.positionTitle)} handoff is ready for review`, "President/Admin acknowledgement is pending.", "handoffs", displayPosition(record.positionTitle), "", "Ready for review", "Medium");
   });
-  kpiReportsForMeeting(state.kpiMeetings[0]?.id || "").filter((r) => r.status !== "Submitted").forEach((report) => {
-    add("KPI Reports", `${displayPosition(report.position)} report not submitted`, report.overallUpdate || "", "kpis", (report.officerMemberIds || [report.officerMemberId]).filter(Boolean).map(memberName).join(", "), "", report.status || "Draft", "Medium");
-  });
+  if (canViewKpiMeetings()) {
+    kpiReportsForMeeting(state.kpiMeetings[0]?.id || "").filter((r) => r.status !== "Submitted").forEach((report) => {
+      add("KPI Reports", `${displayPosition(report.position)} report not submitted`, report.overallUpdate || "", "kpis", (report.officerMemberIds || [report.officerMemberId]).filter(Boolean).map(memberName).join(", "), "", report.status || "Draft", "Medium");
+    });
+  }
   return rows;
 }
 
@@ -2581,7 +2609,9 @@ function renderCommandReadiness() {
     { label: "Leadership assigned", done: buildOfficerDirectory().executiveOfficers.length > 0, view: "leadership", action: "Add Leadership" },
     { label: "Finance ledger active", done: financeLedgerRows("all").length > 0 && state.memberFinanceAccounts?.length > 0, view: "finance", action: "Open Finance" },
     { label: "Attendance ready", done: Boolean(attendanceManager.data?.sessions?.length || state.events.length), view: "events", action: "Start Attendance" },
+    ...(canViewKpiMeetings() ? [
     { label: "KPI cadence started", done: Boolean(state.kpiMeetings?.length), view: "kpis", action: "Create KPI Meeting" }
+    ] : [])
   ];
   const done = checks.filter((c) => c.done).length;
   return `<section class="panel readiness-panel">
@@ -3195,13 +3225,13 @@ function renderReports() {
       ${mini("Payment history", state.finance.filter((f) => f.type === "Payment").length)}
       ${mini("Attendance records", state.attendance.length)}
       ${mini("Executive Team", officerDirectory.executiveOfficers.length)}
-      ${mini("KPI meetings", state.kpiMeetings.length)}
+      ${canViewKpiMeetings() ? mini("KPI meetings", state.kpiMeetings.length) : ""}
       ${mini("Open officer tasks", m.tasks)}
     </div>
     ${renderOfficerReportPackets()}
     <div class="two-col">
       ${reportBlock("Executive Team", officerDirectory.executiveOfficers.map((o) => `${memberName(o.memberId)}: ${o.roles.map((r) => displayPosition(r)).join(", ")}`))}
-      ${reportBlock("KPI reporting", (state.kpiMeetings || []).slice(0, 10).map((meeting) => `${meeting.title || "KPI Meeting"} · ${meeting.meetingDate || ""} · ${meeting.status || "Draft"}`))}
+      ${canViewKpiMeetings() ? reportBlock("KPI reporting", (state.kpiMeetings || []).slice(0, 10).map((meeting) => `${meeting.title || "KPI Meeting"} · ${meeting.meetingDate || ""} · ${meeting.status || "Draft"}`)) : ""}
       ${reportBlock("Outstanding balances", activeMembers().map((m) => ({ name: memberName(m.id), ...memberFinance(m.id) })).filter((x) => x.balance > 0).map((x) => `${x.name}: ${money(x.balance)} · ${x.status}`))}
       ${reportBlock("Payment history", financeRows().filter((f) => f.type === "Payment").slice(0, 25).map((f) => `${memberName(f.memberId)} · ${money(f.amount)} · ${f.paymentDate || ""}`))}
       ${reportBlock("Attendance report", state.attendance.slice(0, 25).map((a) => `${eventName(a.eventId)} · ${a.personType === "Member" ? memberName(a.personId) : pnmName(a.personId)} · ${a.status}`))}
@@ -3251,7 +3281,7 @@ function activeExecutivePositions() {
 }
 
 function renderKpiReports() {
-  if (!can("kpi.view") && !can("all")) return restrictedPanel("KPI Reports are restricted to authorized Executive Team, reporting, and advisor roles.");
+  if (!canViewKpiMeetings()) return restrictedPanel("KPI Reports are restricted to authorized Executive Team, reporting, and advisor roles.");
   const meetings = [...(state.kpiMeetings || [])].filter((m) => m.status !== "Archived").sort((a, b) => String(b.meetingDate || b.meeting_date || "").localeCompare(String(a.meetingDate || a.meeting_date || "")));
   const selectedId = activeFilters.kpis?.meetingId || meetings[0]?.id || "";
   const meeting = meetings.find((m) => m.id === selectedId);
@@ -3357,10 +3387,11 @@ function renderKpiHistory(selectedId) {
 }
 
 function canManageKpis() {
-  return can("all") || can("kpi.manage_all");
+  return canViewKpiMeetings() && (can("all") || can("kpi.manage_all"));
 }
 
 function canEditKpiReport(report) {
+  if (!canViewKpiMeetings()) return false;
   if (canManageKpis()) return true;
   if (can("kpi.submit_own")) return true;
   return (report.officerMemberIds || [report.officerMemberId]).includes(cloud.profile?.member_id || cloud.profile?.memberId || "");
@@ -5379,7 +5410,7 @@ function canExportKey(key) {
   if (key === "attendance-checklist") return can("attendance.view") || can("reports.export") || can("all");
   if (key === "command-alerts") return can("dashboard.role.view") || can("dashboard.executive.view") || can("reports.executive.view") || can("all");
   if (key === "members") return can("members.export") || can("all");
-  if (key === "kpis") return can("reports.export") || can("kpi.view") || can("all");
+  if (key === "kpis") return canViewKpiMeetings();
   if (key === "president-packet") return can("reports.executive.view") || can("all");
   if (key === "treasurer-packet") return can("reports.finance.view") || can("finance.summary.view") || can("all");
   if (key === "secretary-packet") return can("reports.attendance.view") || can("attendance.manage") || can("all");
@@ -5394,6 +5425,7 @@ function canExportKey(key) {
 }
 
 function exportRows(key) {
+  if (key === "kpis" && !canViewKpiMeetings()) return [];
   if (key === "command-alerts") return commandAlertRows().filter((row) => routeAllowed(row.view));
   if (key === "brotherhood-events") {
     return brotherhood.events.filter((event) => event.status !== "Archived").map((event) => {

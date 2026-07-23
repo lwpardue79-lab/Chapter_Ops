@@ -60,4 +60,4 @@ The current app stores the chapter workspace as one RLS-protected JSON document 
 - activity_log
 - settings
 
-Then add per-table RLS policies for Admin, Treasurer, Assistant Treasurer, President, Exec Board, Committee Chair, Active Member, and Read-only Advisor.
+Then add per-table RLS policies for Admin, Treasurer, Assistant Treasurer, President, Exec Board, Active Member, and Read-only Advisor.
