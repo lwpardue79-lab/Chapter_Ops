@@ -1881,6 +1881,7 @@ function renderReports() {
       ${mini("KPI meetings", state.kpiMeetings.length)}
       ${mini("Open officer tasks", m.tasks)}
     </div>
+    ${renderOfficerReportPackets()}
     <div class="two-col">
       ${reportBlock("Executive Team", officerDirectory.executiveOfficers.map((o) => `${memberName(o.memberId)}: ${o.roles.map((r) => displayPosition(r)).join(", ")}`))}
       ${reportBlock("KPI reporting", (state.kpiMeetings || []).slice(0, 10).map((meeting) => `${meeting.title || "KPI Meeting"} · ${meeting.meetingDate || ""} · ${meeting.status || "Draft"}`))}
@@ -1888,6 +1889,22 @@ function renderReports() {
       ${reportBlock("Payment history", financeRows().filter((f) => f.type === "Payment").slice(0, 25).map((f) => `${memberName(f.memberId)} · ${money(f.amount)} · ${f.paymentDate || ""}`))}
       ${reportBlock("Attendance report", state.attendance.slice(0, 25).map((a) => `${eventName(a.eventId)} · ${a.personType === "Member" ? memberName(a.personId) : pnmName(a.personId)} · ${a.status}`))}
       ${reportBlock("Officer task report", openTasks().slice(0, 25).map((t) => `${t.title} · ${t.status} · due ${t.dueDate || "not set"}`))}
+    </div>
+  </section>`;
+}
+
+function renderOfficerReportPackets() {
+  const packets = [
+    ["President Packet", "Executive priorities, officer tasks, KPI readiness, and chapter totals.", "president-packet"],
+    ["Treasurer Packet", "Balances, payment plans, past-due accounts, and recent payments.", "treasurer-packet"],
+    ["Secretary Packet", "Attendance records, missing sessions, and open attendance actions.", "secretary-packet"],
+    ["Recruitment Packet", "PNM pipeline, follow-ups, bids, and referral summary.", "recruitment-packet"],
+    ["VPMD · Brotherhood Packet", "Member follow-ups, brotherhood events, and engagement actions.", "vpmd-packet"]
+  ];
+  return `<section class="report-packets">
+    <div class="section-head"><h4>Officer report packets</h4><p>Export focused CSV packets for recurring officer meetings.</p></div>
+    <div class="report-packet-grid">
+      ${packets.map(([title, body, key]) => `<article class="report-packet-card"><div><strong>${safe(title)}</strong><span>${safe(body)}</span></div><button class="ghost small" data-export="${safe(key)}">Export CSV</button></article>`).join("")}
     </div>
   </section>`;
 }
@@ -3693,12 +3710,14 @@ function canExportKey(key) {
   if (key === "attendance-checklist") return can("attendance.view") || can("reports.export") || can("all");
   if (key === "members") return can("members.export") || can("all");
   if (key === "kpis") return can("reports.export") || can("kpi.view") || can("all");
+  if (key.endsWith("-packet")) return can("reports.export") || can("reports.executive.view") || can("reports.finance.view") || can("all");
   if (key === "reports") return can("reports.export") || can("all");
   if (key === "attendance") return can("attendance.view") || can("reports.export") || can("all");
   return can("reports.export") || can("all");
 }
 
 function exportRows(key) {
+  if (key.endsWith("-packet")) return officerPacketRows(key);
   if (key === "finance" || key === "finance-filtered" || key === "finance-all") {
     const rows = financeLedgerRows(key === "finance-all" ? "all" : "filtered");
     return rows.map((row) => ({
@@ -3768,6 +3787,77 @@ function exportRows(key) {
     });
   }
   return (state[key] || filteredRows(key)).map((r) => ({ ...r, memberName: r.memberId ? memberName(r.memberId) : "" }));
+}
+
+function officerPacketRows(key) {
+  const m = metrics();
+  const packetName = {
+    "president-packet": "President Packet",
+    "treasurer-packet": "Treasurer Packet",
+    "secretary-packet": "Secretary Packet",
+    "recruitment-packet": "Recruitment Packet",
+    "vpmd-packet": "VPMD · Brotherhood Packet"
+  }[key] || "Officer Packet";
+  const base = (section, item, value, owner = "", dueDate = "", status = "") => ({
+    packet: packetName,
+    generatedAt: new Date().toISOString(),
+    section,
+    item,
+    value,
+    owner,
+    dueDate,
+    status
+  });
+  if (key === "president-packet") {
+    return [
+      base("Summary", "Active Members", m.members),
+      base("Summary", "Outstanding Dues", money(m.outstanding)),
+      base("Summary", "Chapter Attendance Rate", m.attendanceRate),
+      base("Summary", "Reports Awaiting Review", m.reportsAwaitingReview),
+      ...openTasks().filter((t) => t.dueDate && t.dueDate < todayIso()).map((t) => base("Overdue Officer Tasks", t.title, t.description || "", memberName(t.assignedMemberId) || t.assignedPerson || "", t.dueDate || "", t.status || "")),
+      ...kpiReportsForMeeting(state.kpiMeetings[0]?.id || "").filter((r) => r.status !== "Submitted").map((r) => base("KPI Reports", displayPosition(r.position), r.status || "Draft", (r.officerMemberIds || [r.officerMemberId]).filter(Boolean).map(memberName).join(", "), "", r.status || "Draft"))
+    ];
+  }
+  if (key === "treasurer-packet") {
+    return [
+      base("Summary", "Total Pending Charges", money(m.totalBilled)),
+      base("Summary", "Total Collected", money(m.totalCollected)),
+      base("Summary", "Outstanding Balance", money(m.outstanding)),
+      base("Summary", "Payment Plans", m.plans),
+      ...financeLedgerRows("all").filter((row) => row.totalBalanceCents > 0).map((row) => base("Outstanding Balances", `${row.lastName}, ${row.firstName}`, moneyFromCents(row.totalBalanceCents), row.memberIdentifier, row.dueDate || "", row.paymentPlanStatus || "None")),
+      ...financeRows().filter((f) => f.type === "Payment").slice(0, 50).map((f) => base("Recent Payments", memberName(f.memberId), money(f.amount), f.paymentMethod || "", f.paymentDate || "", f.status || "Recorded"))
+    ];
+  }
+  if (key === "secretary-packet") {
+    return [
+      base("Summary", "Attendance Records", state.attendance.length),
+      base("Summary", "Missing Attendance Records", m.missingAttendance),
+      base("Summary", "Chapter Attendance Rate", m.attendanceRate),
+      ...state.events.filter((event) => !event.archived && event.date && event.date <= todayIso() && !state.attendance.some((a) => a.eventId === event.id)).map((event) => base("Missing Attendance", event.name || event.eventName || "Event", event.type || event.eventType || "", "", event.date || "", "Needs record")),
+      ...openTasks().filter((t) => normalizeTitle(t.assignedPerson || t.category || "").includes("secretary")).map((t) => base("Secretary Tasks", t.title, t.description || "", t.assignedPerson || "", t.dueDate || "", t.status || ""))
+    ];
+  }
+  if (key === "recruitment-packet") {
+    return [
+      base("Summary", "Active PNMs", activePnms().length),
+      base("Summary", "Bids Extended", m.bidsExtended),
+      base("Summary", "Bids Accepted", m.bidsAccepted),
+      base("Summary", "Acceptance Rate", m.acceptanceRate),
+      ...activePnms().filter((p) => p.followUpDate && p.followUpDate <= todayIso()).map((p) => base("PNM Follow-Up", pnmName(p.id), p.status || "", p.assignedRecruiter || p.assignedBrother || "", p.followUpDate || "", "Due")),
+      ...activePnms().map((p) => base("Pipeline", pnmName(p.id), p.status || "", p.assignedRecruiter || p.assignedBrother || "", p.followUpDate || "", p.referralSource || ""))
+    ];
+  }
+  if (key === "vpmd-packet") {
+    return [
+      base("Summary", "Active Members", m.members),
+      base("Summary", "New Members", m.newMembers),
+      base("Summary", "Chapter Attendance Rate", m.attendanceRate),
+      ...activeMembers().filter((member) => member.followUpDate && member.followUpDate <= todayIso()).map((member) => base("Member Follow-Up", memberName(member.id), member.memberStatus || "", member.officerRole || "", member.followUpDate || "", "Due")),
+      ...state.events.filter((event) => !event.archived && (event.type === "Brotherhood" || event.eventType === "Brotherhood" || event.event_category === "Brotherhood")).map((event) => base("Brotherhood Events", event.name || event.eventName || "Event", event.location || "", "", event.date || "", event.required ? "Required" : "Optional")),
+      ...openTasks().filter((t) => ["vpmd", "brotherhood", "membership development"].some((needle) => normalizeTitle(t.assignedPerson || t.category || t.title || "").includes(needle))).map((t) => base("VPMD Tasks", t.title, t.description || "", t.assignedPerson || "", t.dueDate || "", t.status || ""))
+    ];
+  }
+  return [base("Summary", "No packet rows available", "")];
 }
 
 function downloadFinanceTemplate() {
