@@ -79,7 +79,7 @@ const memberNavigationItems = [
   { tab: "attendance", label: "My Attendance" },
   { tab: "tasks", label: "My Tasks" },
   { tab: "calendar", label: "Chapter Calendar" },
-  { tab: "announcements", label: "Announcements" }
+  { tab: "announcements", label: "Notifications" }
 ];
 const memberRouteMap = {
   member: "home",
@@ -1406,7 +1406,7 @@ function renderPortalHome(data) {
   <div class="three-col">
     ${portalListPanel("Recent Payments", (data.payments || []).slice(0, 5).map((p) => `${safe(p.date || "No date")}<span>${safe(p.type || "Payment")} · ${safe(p.paymentDisplay || p.amountDisplay || "")}</span>`), "payments")}
     ${portalListPanel("Upcoming Chapter Events", events.slice(0, 5).map((e) => `${safe(e.name || e.title)}<span>${safe(e.date || "")} · ${safe(e.location || "Location TBA")}</span>`), "calendar")}
-    ${portalListPanel("Latest Announcement", announcements.slice(0, 3).map((a) => `${safe(a.title)}<span>${safe(a.publishedAt || "")}</span>`), "announcements")}
+    ${portalListPanel("Latest Notifications", announcements.slice(0, 3).map((a) => `${safe(a.title)}<span>${safe(a.publishedAt || "")}</span>`), "announcements")}
   </div>`;
 }
 
@@ -1424,7 +1424,7 @@ function portalEmptyText(tab) {
     attendance: "No attendance records yet.",
     tasks: "No open tasks.",
     calendar: "No upcoming member-visible events.",
-    announcements: "No current chapter announcements."
+    announcements: "No current notifications."
   }[tab] || "Nothing to show yet.";
 }
 
@@ -1525,8 +1525,8 @@ function memberVisiblePortalEvents(existingEvents = []) {
 }
 
 function renderPortalAnnouncements(announcements) {
-  if (!announcements.length) return `<section class="panel empty-state"><h3>No announcements</h3><p>There are no current chapter announcements.</p></section>`;
-  return `<section class="panel"><div class="panel-head"><div><h3>Announcements</h3><p class="muted">Chapter updates shared with you.</p></div></div><div class="stack-list">${announcements.map((a) => `<article class="stack-item"><strong>${safe(a.title)}</strong><span>${safe(a.body || "")}</span><span>${safe(a.publishedAt || "")}</span></article>`).join("")}</div></section>`;
+  if (!announcements.length) return `<section class="panel empty-state"><h3>No notifications</h3><p>Chapter updates and event changes will appear here.</p></section>`;
+  return `<section class="panel"><div class="panel-head"><div><h3>Notifications</h3><p class="muted">Chapter updates shared with you.</p></div></div><div class="stack-list">${announcements.map((a) => `<article class="stack-item"><strong>${safe(a.title)}</strong><span>${safe(a.body || "")}</span><span>${safe(a.publishedAt || "")}</span></article>`).join("")}</div></section>`;
 }
 
 function portalTable(headers, rows, allowHtml = false) {
@@ -1794,6 +1794,7 @@ function renderBrotherhoodEvents() {
   const rows = filteredBrotherhoodEvents();
   const stats = brotherhoodStats();
   const actions = [["Refresh", "ghost", "brotherhood-refresh"]];
+  if (admin) actions.unshift(["Export Attendance", "ghost", "export:brotherhood-attendance"], ["Export RSVPs", "ghost", "export:brotherhood-rsvps"], ["Export Events", "ghost", "export:brotherhood-events"]);
   if (manage) actions.unshift(["Create Brotherhood Event", "primary", "brotherhood-create"]);
   return `${renderPageHeader("Brotherhood Events", "Plan brotherhood, member-development, service, social, academic, and alumni events.", actions)}
     ${brotherhood.error ? `<section class="notice error-notice"><h4>Brotherhood Events unavailable</h4><p>${safe(brotherhood.error)}</p><button class="ghost" data-brotherhood-refresh>Retry</button></section>` : ""}
@@ -4814,7 +4815,10 @@ function exportFileName(key) {
     "treasurer-packet": "ao-command-treasurer-packet",
     "secretary-packet": "ao-command-secretary-packet",
     "recruitment-packet": "ao-command-recruitment-packet",
-    "vpmd-packet": "ao-command-vpmd-brotherhood-packet"
+    "vpmd-packet": "ao-command-vpmd-brotherhood-packet",
+    "brotherhood-events": "ao-command-brotherhood-events",
+    "brotherhood-rsvps": "ao-command-brotherhood-rsvps",
+    "brotherhood-attendance": "ao-command-brotherhood-attendance"
   }[key] || `${key}-export`;
 }
 
@@ -4829,6 +4833,7 @@ function canExportKey(key) {
   if (key === "secretary-packet") return can("reports.attendance.view") || can("attendance.manage") || can("all");
   if (key === "recruitment-packet") return can("reports.recruitment.view") || can("recruitment.manage") || can("all");
   if (key === "vpmd-packet") return can("reports.member_development.view") || can("members.update") || can("all");
+  if (key.startsWith("brotherhood-")) return canViewBrotherhoodAdmin();
   if (key.endsWith("-packet")) return can("reports.export") || can("reports.executive.view") || can("reports.finance.view") || can("all");
   if (key === "reports") return can("reports.export") || can("all");
   if (key === "attendance") return can("attendance.view") || can("reports.export") || can("all");
@@ -4837,6 +4842,71 @@ function canExportKey(key) {
 
 function exportRows(key) {
   if (key === "command-alerts") return commandAlertRows().filter((row) => routeAllowed(row.view));
+  if (key === "brotherhood-events") {
+    return brotherhood.events.filter((event) => event.status !== "Archived").map((event) => {
+      const rsvps = eventRsvps(event.id);
+      const attendance = eventAttendance(event.id);
+      const recap = eventRecap(event.id);
+      return {
+        title: event.title,
+        category: event.category,
+        status: event.status,
+        required: event.required ? "Required" : "Optional",
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        location: event.location,
+        organizer: memberName(event.organizerMemberId) || "",
+        assignedOfficer: memberName(event.assignedOfficerMemberId) || "",
+        rsvpDeadline: event.rsvpDeadline || "",
+        capacity: event.capacity || "",
+        waitlistEnabled: event.waitlistEnabled ? "Yes" : "No",
+        attendanceMethod: event.attendanceMethod || "",
+        participationPointValue: event.participationPointValue || 0,
+        rsvpCount: rsvps.length,
+        attendingCount: rsvps.filter((rsvp) => rsvp.status === "Attending").length,
+        waitlistCount: rsvps.filter((rsvp) => rsvp.waitlistStatus === "waitlisted").length,
+        presentCount: attendance.filter((row) => ["Present", "Late", "Left early"].includes(row.status)).length,
+        absentCount: attendance.filter((row) => row.status === "Absent").length,
+        excusedCount: attendance.filter((row) => row.status === "Excused").length,
+        recapCompleted: recap?.completedAt ? "Yes" : "No"
+      };
+    });
+  }
+  if (key === "brotherhood-rsvps") {
+    return brotherhood.rsvps.map((rsvp) => {
+      const event = brotherhood.events.find((item) => item.id === rsvp.eventId) || {};
+      const member = state.members.find((item) => item.id === rsvp.memberId) || {};
+      return {
+        eventTitle: event.title || "",
+        eventDate: dateOnly(event.startsAt || ""),
+        memberName: memberName(rsvp.memberId) || "",
+        memberId: memberIdentifier(member) || rsvp.memberId || "",
+        status: rsvp.status || "",
+        waitlistStatus: rsvp.waitlistStatus || "",
+        excuseNote: rsvp.excuseNote || "",
+        submittedAt: rsvp.updatedAt || rsvp.createdAt || ""
+      };
+    });
+  }
+  if (key === "brotherhood-attendance") {
+    return brotherhood.attendance.map((record) => {
+      const event = brotherhood.events.find((item) => item.id === record.eventId) || {};
+      const member = state.members.find((item) => item.id === record.memberId) || {};
+      return {
+        eventTitle: event.title || "",
+        eventDate: dateOnly(event.startsAt || ""),
+        memberName: memberName(record.memberId) || "",
+        memberId: memberIdentifier(member) || record.memberId || "",
+        status: record.status || "",
+        checkInAt: record.checkInAt || "",
+        checkInMethod: record.checkInMethod || "",
+        suspicious: record.suspicious ? "Yes" : "No",
+        previousStatus: record.previousStatus || "",
+        correctionReason: record.correctionReason || "",
+        updatedAt: record.updatedAt || ""
+      };
+    });
+  }
   if (key.endsWith("-packet")) return officerPacketRows(key);
   if (key === "finance" || key === "finance-filtered" || key === "finance-all") {
     const rows = financeLedgerRows(key === "finance-all" ? "all" : "filtered");
@@ -4968,11 +5038,27 @@ function officerPacketRows(key) {
     ];
   }
   if (key === "vpmd-packet") {
+    const bStats = brotherhoodStats();
+    const bEvents = brotherhood.events.filter((event) => event.status !== "Archived");
+    const bUpcoming = bEvents.filter((event) => event.startsAt && event.startsAt >= new Date().toISOString() && event.status !== "Cancelled");
+    const bPastWithoutRecap = bEvents.filter((event) => event.endsAt && event.endsAt < new Date().toISOString() && !eventRecap(event.id)?.completedAt && !["Draft", "Cancelled"].includes(event.status));
+    const rsvpFollowUps = bUpcoming.flatMap((event) => {
+      const submitted = new Set(eventRsvps(event.id).map((rsvp) => rsvp.memberId));
+      return activeMembers().filter((member) => !submitted.has(member.id)).slice(0, 25).map((member) => base("Missing RSVP", event.title, memberName(member.id), memberIdentifier(member), event.rsvpDeadline || dateOnly(event.startsAt), "Needs follow-up"));
+    });
     return [
       base("Summary", "Active Members", m.members),
       base("Summary", "New Members", m.newMembers),
       base("Summary", "Chapter Attendance Rate", m.attendanceRate),
+      base("Brotherhood Summary", "Events Held This Semester", bStats.eventsHeld),
+      base("Brotherhood Summary", "Upcoming Brotherhood Events", bStats.upcoming),
+      base("Brotherhood Summary", "Average RSVP Rate", bStats.averageRsvpRate),
+      base("Brotherhood Summary", "Average Attendance Rate", bStats.averageAttendanceRate),
+      base("Brotherhood Summary", "Recaps Awaiting Completion", bStats.recapsDue),
       ...activeMembers().filter((member) => member.followUpDate && member.followUpDate <= todayIso()).map((member) => base("Member Follow-Up", memberName(member.id), member.memberStatus || "", member.officerRole || "", member.followUpDate || "", "Due")),
+      ...bUpcoming.map((event) => base("Upcoming Brotherhood Events", event.title, `${event.category} · ${event.location || "Location TBA"}`, memberName(event.assignedOfficerMemberId) || memberName(event.organizerMemberId) || "", dateOnly(event.startsAt), event.required ? "Required" : "Optional")),
+      ...bPastWithoutRecap.map((event) => base("Recaps Due", event.title, `${event.category} · ${event.location || ""}`, memberName(event.assignedOfficerMemberId) || "", dateOnly(event.endsAt), "Needs recap")),
+      ...rsvpFollowUps,
       ...state.events.filter((event) => !event.archived && (event.type === "Brotherhood" || event.eventType === "Brotherhood" || event.event_category === "Brotherhood")).map((event) => base("Brotherhood Events", event.name || event.eventName || "Event", event.location || "", "", event.date || "", event.required ? "Required" : "Optional")),
       ...openTasks().filter((t) => ["vpmd", "brotherhood", "membership development"].some((needle) => normalizeTitle(t.assignedPerson || t.category || t.title || "").includes(needle))).map((t) => base("VPMD Tasks", t.title, t.description || "", t.assignedPerson || "", t.dueDate || "", t.status || ""))
     ];
