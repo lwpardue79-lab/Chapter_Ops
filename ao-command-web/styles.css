@@ -116,6 +116,183 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .keyboard-hint { color: var(--muted); font-size: 12px; margin: 0; }
 
+.presentation-mode .sidebar {
+  display: none;
+}
+.presentation-mode .app-shell {
+  grid-template-columns: 1fr;
+}
+.presentation-mode .main {
+  max-width: 1680px;
+  padding: clamp(20px, 3vw, 42px);
+}
+.presentation-mode #undoBtn,
+.presentation-mode #syncBtn,
+.presentation-mode #importBtn,
+.presentation-mode #exportBtn,
+.presentation-mode #resetBtn,
+.presentation-mode #globalSearchBtn {
+  display: none !important;
+}
+.presentation-shell {
+  display: grid;
+  gap: 22px;
+}
+.presentation-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: clamp(26px, 4vw, 46px);
+  color: white;
+  background: linear-gradient(135deg, #0f2f4a, #1d4ed8 72%, #60a5fa);
+  border-radius: 30px;
+  box-shadow: var(--shadow);
+}
+.presentation-hero h1 {
+  margin: 4px 0 8px;
+  font-size: clamp(40px, 7vw, 78px);
+  line-height: 0.94;
+  letter-spacing: -0.07em;
+}
+.presentation-hero p {
+  max-width: 760px;
+  margin: 0;
+  color: rgba(255,255,255,0.86);
+  font-size: clamp(16px, 2vw, 22px);
+}
+.presentation-hero .eyebrow {
+  color: #bfdbfe;
+}
+.presentation-actions .ghost {
+  background: rgba(255,255,255,0.12);
+  color: white;
+  border-color: rgba(255,255,255,0.28);
+}
+.presentation-actions .primary {
+  background: white;
+  color: var(--brand);
+  box-shadow: none;
+}
+.presentation-section {
+  padding: clamp(20px, 3vw, 32px);
+  background: rgba(255,255,255,0.96);
+  border: 1px solid rgba(219,229,238,0.95);
+  border-radius: 28px;
+  box-shadow: var(--shadow);
+}
+.presentation-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+  margin-bottom: 16px;
+}
+.presentation-section-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(22px, 3vw, 34px);
+  letter-spacing: -0.05em;
+}
+.presentation-section-head span {
+  color: var(--muted);
+  font-weight: 800;
+}
+.presentation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.presentation-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.presentation-metric {
+  min-height: 118px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+.presentation-metric span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.presentation-metric strong {
+  color: var(--ink);
+  font-size: clamp(30px, 4vw, 48px);
+  letter-spacing: -0.06em;
+  line-height: 1;
+}
+.presentation-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+.presentation-list {
+  display: grid;
+  gap: 10px;
+}
+.presentation-list article {
+  padding: 15px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #f8fbff;
+}
+.presentation-list strong,
+.presentation-list span {
+  display: block;
+}
+.presentation-list span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-weight: 750;
+}
+.presentation-empty {
+  padding: 18px;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: 18px;
+  background: #f8fbff;
+  font-weight: 800;
+}
+.presentation-flow {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+.presentation-flow div {
+  min-height: 130px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #f8fbff;
+}
+.presentation-flow b {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: var(--brand-2);
+  border-radius: 999px;
+}
+.presentation-flow span {
+  color: var(--ink);
+  font-weight: 850;
+  line-height: 1.25;
+}
+
 .hero, .panel {
   background: rgba(255,255,255,0.94); border: 1px solid rgba(219,229,238,0.95); box-shadow: var(--shadow); border-radius: 24px;
 }
@@ -765,6 +942,10 @@ button:disabled {
   .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .topbar, .hero, .panel-head, .page-header { align-items: flex-start; flex-direction: column; }
   .kpi-grid, .mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .presentation-hero, .presentation-section-head { align-items: flex-start; flex-direction: column; }
+  .presentation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .presentation-two-col { grid-template-columns: 1fr; }
+  .presentation-flow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .quick-grid, .priority-grid, .readiness-list, .role-focus-grid, .trust-grid, .report-packet-grid, .treasurer-workflow-grid, .three-col, .two-col, .card-grid, .settings-grid, .event-card-grid { grid-template-columns: 1fr; }
   .form-grid, .form-grid.compact { grid-template-columns: 1fr; }
 }
@@ -779,6 +960,9 @@ button:disabled {
   .panel { padding: 15px; border-radius: 20px; }
   .kpi-card, .mini-card, .action-tile { padding: 15px; border-radius: 17px; }
   .kpi-grid, .mini-grid { grid-template-columns: 1fr; }
+  .presentation-grid, .presentation-mini-grid, .presentation-flow { grid-template-columns: 1fr; }
+  .presentation-hero, .presentation-section { border-radius: 22px; }
+  .presentation-metric { min-height: 96px; }
   .command-alert { width: 100%; justify-content: space-between; }
   .alert-row { grid-template-columns: 1fr; }
   .alert-meta { grid-template-columns: 1fr; }
@@ -808,4 +992,19 @@ button:disabled {
   .app-shell { display: block; }
   .main { padding: 0; }
   .panel { box-shadow: none; border: 0; }
+  .presentation-mode .topbar { display: none !important; }
+  .presentation-mode .presentation-section,
+  .presentation-mode .presentation-hero {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #dbe5ee;
+  }
+  .presentation-mode .presentation-hero {
+    color: #0b1f33;
+    background: white;
+  }
+  .presentation-mode .presentation-hero p,
+  .presentation-mode .presentation-hero .eyebrow {
+    color: #334155;
+  }
 }

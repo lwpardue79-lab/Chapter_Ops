@@ -116,6 +116,7 @@ let financeSort = { key: "lastName", dir: "asc" };
 let activePortalTab = "home";
 let memberPortal = { loading: false, error: "", data: null, saving: false };
 let attendanceManager = { loading: false, error: "", data: null, selectedSessionId: "", search: "", filter: "all", saving: new Set(), saveStatus: "" };
+let presentationMode = false;
 let brotherhood = {
   loading: false,
   error: "",
@@ -344,6 +345,8 @@ async function initCloud() {
 function updateCloudUi(message) {
   document.getElementById("cloudStatus").textContent = message;
   document.getElementById("globalSearchBtn").classList.toggle("hidden", !cloud.user || cloud.profile?.approval_status !== "approved");
+  document.getElementById("presentationBtn").classList.toggle("hidden", !cloud.user || cloud.profile?.approval_status !== "approved" || !isOperationsWorkspaceAllowed());
+  document.getElementById("presentationBtn").textContent = presentationMode ? "Exit Presentation" : "Presentation Mode";
   document.getElementById("signInBtn").classList.toggle("hidden", !!cloud.user);
   document.getElementById("syncBtn").classList.toggle("hidden", !cloud.user || !isFullWorkspaceAllowed());
   document.getElementById("signOutBtn").classList.toggle("hidden", !cloud.user);
@@ -1326,7 +1329,9 @@ function render() {
   refreshNavigation();
   if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !routeAllowed(activeView)) activeView = defaultViewForRole();
   const signedOut = cloud.client && !cloud.user;
-  document.getElementById("viewTitle").textContent = signedOut ? productName : viewNames[activeView];
+  if (!cloud.user || cloud.profile?.approval_status !== "approved" || !isOperationsWorkspaceAllowed()) presentationMode = false;
+  document.body.classList.toggle("presentation-mode", presentationMode);
+  document.getElementById("viewTitle").textContent = presentationMode ? "Executive Presentation" : signedOut ? productName : viewNames[activeView];
   document.getElementById("orgLabel").textContent = signedOut ? productDescription : `${state.settings.chapterName} · ${state.settings.schoolName}`;
   document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.view === activeView || b.dataset.memberTab === activePortalTab));
   document.getElementById("resetBtn").textContent = "Clear local data";
@@ -1350,6 +1355,12 @@ function render() {
   }
   if (!routeAllowed(activeView)) {
     root.innerHTML = renderRestrictedPage();
+    bindViewActions(root);
+    bindAuthActions(root);
+    return;
+  }
+  if (presentationMode) {
+    root.innerHTML = renderPresentationMode();
     bindViewActions(root);
     bindAuthActions(root);
     return;
@@ -1744,6 +1755,107 @@ function renderDashboard() {
         <button class="action-tile" data-add="tasks">Create task</button>
       </div>
     </section>`;
+}
+
+function renderPresentationMode() {
+  const m = metrics();
+  const stats = brotherhoodStats();
+  const alerts = commandAlertRows().filter((row) => routeAllowed(row.view)).slice(0, 6);
+  const upcomingBrotherhood = brotherhood.events
+    .filter((event) => event.status === "Published" && event.startsAt && new Date(event.startsAt) >= new Date())
+    .sort((a, b) => String(a.startsAt || "").localeCompare(String(b.startsAt || "")))
+    .slice(0, 4);
+  const kpiSummary = state.kpiMeetings?.length ? kpiMeetingSummary(state.kpiMeetings[0].id) : { completedReports: 0, missingReports: 0, readiness: 0, onTrack: 0, atRisk: 0, offTrack: 0 };
+  return `<div class="presentation-shell">
+    <section class="presentation-hero">
+      <div>
+        <p class="eyebrow">AO Command presentation mode</p>
+        <h1>${safe(productName)}</h1>
+        <p>${safe(productTagline)} Real chapter operations summarized without exposing private member details.</p>
+      </div>
+      <div class="button-row presentation-actions">
+        <button class="ghost" data-presentation-exit>Exit Presentation</button>
+        <button class="primary" data-print>Print / PDF</button>
+      </div>
+    </section>
+
+    <section class="presentation-section">
+      <div class="presentation-section-head">
+        <h2>Executive snapshot</h2>
+        <span>${safe(state.settings.chapterName || "Alpha Omega Chapter")} · ${safe(state.settings.schoolName || "Kansas State University")}</span>
+      </div>
+      <div class="presentation-grid">
+        ${presentationMetric("Active Members", m.members)}
+        ${presentationMetric("Upcoming Events", m.events)}
+        ${presentationMetric("Open Officer Tasks", m.tasks)}
+        ${presentationMetric("Overdue Tasks", openTasks().filter((t) => t.dueDate && t.dueDate < todayIso()).length)}
+        ${presentationMetric("Recruitment Follow-Ups", m.pnmFollowUps)}
+        ${presentationMetric("Chapter Attendance Rate", m.attendanceRate)}
+        ${presentationMetric("Reports Awaiting Review", m.reportsAwaitingReview)}
+        ${presentationMetric("Officer Handoffs Missing", m.handoffMissing)}
+      </div>
+    </section>
+
+    <div class="presentation-two-col">
+      <section class="presentation-section">
+        <div class="presentation-section-head"><h2>Executive priorities</h2><span>Highest-signal open items</span></div>
+        ${alerts.length ? `<div class="presentation-list">${alerts.map(renderPresentationAlert).join("")}</div>` : `<div class="presentation-empty">No urgent command alerts right now.</div>`}
+      </section>
+      <section class="presentation-section">
+        <div class="presentation-section-head"><h2>Brotherhood engagement</h2><span>Operational indicators for VPMD review</span></div>
+        <div class="presentation-mini-grid">
+          ${presentationMetric("Events Held", stats.eventsHeld)}
+          ${presentationMetric("Upcoming", stats.upcoming)}
+          ${presentationMetric("Average RSVP", stats.averageRsvpRate)}
+          ${presentationMetric("Average Attendance", stats.averageAttendanceRate)}
+          ${presentationMetric("Required Attendance", stats.requiredAttendanceRate)}
+          ${presentationMetric("Recaps Due", stats.recapsDue)}
+        </div>
+      </section>
+    </div>
+
+    <div class="presentation-two-col">
+      <section class="presentation-section">
+        <div class="presentation-section-head"><h2>Upcoming Brotherhood Events</h2><span>Published events only</span></div>
+        ${upcomingBrotherhood.length ? `<div class="presentation-list">${upcomingBrotherhood.map((event) => `<article><strong>${safe(event.title)}</strong><span>${safe([formatDateTime(event.startsAt), event.category, event.required ? "Required" : "Optional"].filter(Boolean).join(" · "))}</span></article>`).join("")}</div>` : `<div class="presentation-empty">No published Brotherhood Events are scheduled.</div>`}
+      </section>
+      <section class="presentation-section">
+        <div class="presentation-section-head"><h2>KPI meeting readiness</h2><span>Current selected meeting</span></div>
+        <div class="presentation-mini-grid">
+          ${presentationMetric("Reports Complete", kpiSummary.completedReports || 0)}
+          ${presentationMetric("Reports Missing", kpiSummary.missingReports || 0)}
+          ${presentationMetric("Readiness", `${kpiSummary.readiness || 0}%`)}
+          ${presentationMetric("On Track", kpiSummary.onTrack || 0)}
+          ${presentationMetric("At Risk", kpiSummary.atRisk || 0)}
+          ${presentationMetric("Off Track", kpiSummary.offTrack || 0)}
+        </div>
+      </section>
+    </div>
+
+    <section class="presentation-section">
+      <div class="presentation-section-head"><h2>Executive demo flow</h2><span>Safe workflow walkthrough</span></div>
+      <div class="presentation-flow">
+        ${["Create and publish a Brotherhood Event", "Member RSVPs from the portal", "VPMD records attendance", "Dashboard updates engagement indicators", "Missed required event becomes a follow-up", "Event recap feeds officer handoff history"].map((step, index) => `<div><b>${index + 1}</b><span>${safe(step)}</span></div>`).join("")}
+      </div>
+    </section>
+  </div>`;
+}
+
+function presentationMetric(label, value) {
+  return `<article class="presentation-metric"><span>${safe(label)}</span><strong>${safe(value)}</strong></article>`;
+}
+
+function renderPresentationAlert(row) {
+  const label = {
+    Finance: "Finance item needs review",
+    Tasks: "Officer task needs follow-up",
+    Recruitment: "Recruitment follow-up due",
+    Attendance: "Attendance record needs review",
+    Brotherhood: "Brotherhood event action needed",
+    "Officer Handoffs": "Officer handoff needs attention",
+    "KPI Reports": "KPI report needs review"
+  }[row.category] || `${row.category} item needs attention`;
+  return `<article><strong>${safe(label)}</strong><span>${safe([row.due, row.status, row.priority].filter(Boolean).join(" · "))}</span></article>`;
 }
 
 function renderRoleScopedDashboard(m) {
@@ -3650,6 +3762,10 @@ function bindViewActions(root) {
   root.querySelectorAll("[data-edit-finance], [data-view-finance]").forEach((el) => el.addEventListener("click", (ev) => { ev.stopPropagation(); openFinanceAccountForm(el.dataset.editFinance || el.dataset.viewFinance); }));
   root.querySelectorAll("[data-finance-member]").forEach((el) => el.addEventListener("click", (ev) => { if (ev.target.closest(".row-actions, button")) return; openFinanceAccountForm(el.dataset.financeMember); }));
   root.querySelectorAll("[data-print]").forEach((el) => el.addEventListener("click", () => window.print()));
+  root.querySelectorAll("[data-presentation-exit]").forEach((el) => el.addEventListener("click", () => {
+    presentationMode = false;
+    render();
+  }));
   root.querySelectorAll("[data-filter-status]").forEach((el) => el.addEventListener("click", () => { activeFilters.pnms = { status: el.dataset.filterStatus }; render(); }));
   root.querySelectorAll("[data-bulk-charge]").forEach((el) => el.addEventListener("click", openBulkChargeForm));
   root.querySelectorAll("[data-record-payment]").forEach((el) => el.addEventListener("click", () => openPaymentForm(el.dataset.recordPayment || "")));
@@ -5590,6 +5706,11 @@ window.addEventListener("popstate", () => {
 document.querySelectorAll(".nav-item").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 document.getElementById("signInBtn").addEventListener("click", signIn);
 document.getElementById("globalSearchBtn").addEventListener("click", openGlobalSearch);
+document.getElementById("presentationBtn").addEventListener("click", () => {
+  if (!cloud.user || cloud.profile?.approval_status !== "approved" || !isOperationsWorkspaceAllowed()) return toast("Approved chapter access is required for Presentation Mode.");
+  presentationMode = !presentationMode;
+  render();
+});
 document.addEventListener("keydown", (ev) => {
   const isSearchShortcut = (ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k";
   if (!isSearchShortcut || ev.target?.closest?.("input, textarea, select")) return;
