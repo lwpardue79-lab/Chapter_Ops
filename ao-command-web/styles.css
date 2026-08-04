@@ -746,6 +746,30 @@ tr:hover td { background: #f8fbff; }
 .status-pill {
   display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 4px 9px; background: #f8fbff; font-size: 12px; font-weight: 900;
 }
+.role-access-wrap { border: 1px solid var(--line); border-radius: 18px; max-height: 62vh; }
+.role-access-table { min-width: 1180px; }
+.role-access-table td:not(:first-child), .role-access-table th:not(:first-child) { text-align: center; }
+.access-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 74px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 900;
+}
+.access-dot.allowed {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+.access-dot.blocked {
+  border-color: #e5e7eb;
+  background: #f8fafc;
+  color: #64748b;
+}
 
 .search, input, select, textarea {
   width: 100%; border: 1px solid var(--line); border-radius: 12px; background: white; padding: 10px 12px; color: var(--ink);

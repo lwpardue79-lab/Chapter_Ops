@@ -3663,7 +3663,6 @@ function renderSettings() {
       ${listSetting("memberStatuses", "Member statuses")}
       ${listSetting("eventTypes", "Event types")}
       ${listSetting("committees", "Committees")}
-      ${listSetting("permissionRoles", "Permission roles")}
       <label class="wide">Privacy notice<textarea id="set_privacyNotice">${safe(state.settings.privacyNotice)}</textarea></label>
     </div>
     <div class="settings-grid">
@@ -3673,7 +3672,7 @@ function renderSettings() {
     </div>
     ${renderTrustOperationsPanel()}
   </section>
-  ${can("all") ? renderAdminUserManagement() : ""}`;
+  ${can("all") ? `${renderAdminUserManagement()}${renderRoleAccessMatrix()}` : ""}`;
 }
 
 function renderTrustOperationsPanel() {
@@ -3724,6 +3723,40 @@ function renderAdminUserManagement() {
       </div></td>
     </tr>`;
     }).join("")}</tbody></table></div>` : `<div class="empty-state"><h3>No access requests yet.</h3><p>When your Treasurer or another officer creates an account with a personal email, they will appear here for approval.</p></div>`}
+  </section>`;
+}
+
+function renderRoleAccessMatrix() {
+  const modules = [
+    ["Command Center", "dashboard.role.view"],
+    ["Member Directory", "members.list.view"],
+    ["Leadership", "officers.view"],
+    ["Recruitment Pipeline", "recruitment.view"],
+    ["Events", "events.view"],
+    ["Attendance", "attendance.view"],
+    ["Financial Operations", "finance.member_balances.view"],
+    ["KPI Reports", "view_kpi_meetings"],
+    ["Action Center", "tasks.view_all"],
+    ["Reports", "reports.executive.view"],
+    ["Administration", "settings.view"]
+  ];
+  const accessFor = (role, permission) => {
+    const permissions = permissionsForRole(role);
+    return permissions.has("all") || permissions.has(permission);
+  };
+  return `<section class="panel">
+    <div class="panel-head">
+      <div><p class="eyebrow">Admin only</p><h3>Role access matrix</h3><p class="muted">Use this to confirm what each account type can open before assigning roles.</p></div>
+    </div>
+    <div class="table-wrap role-access-wrap"><table class="role-access-table">
+      <thead><tr><th>Role</th>${modules.map(([label]) => `<th>${safe(label)}</th>`).join("")}</tr></thead>
+      <tbody>
+        ${permissionRoles.map((role) => `<tr>
+          <td data-label="Role"><strong>${safe(role)}</strong></td>
+          ${modules.map(([label, permission]) => `<td data-label="${safe(label)}"><span class="access-dot ${accessFor(role, permission) ? "allowed" : "blocked"}">${accessFor(role, permission) ? "Allowed" : "Blocked"}</span></td>`).join("")}
+        </tr>`).join("")}
+      </tbody>
+    </table></div>
   </section>`;
 }
 
@@ -4779,7 +4812,7 @@ function collectSettingsFromForm() {
     const el = document.getElementById(`set_${k}`);
     if (el) next[k] = el.value;
   });
-  ["officerRoles", "executiveOfficerRoles", "memberStatuses", "eventTypes", "committees", "permissionRoles"].forEach((k) => {
+  ["officerRoles", "executiveOfficerRoles", "memberStatuses", "eventTypes", "committees"].forEach((k) => {
     const el = document.getElementById(`set_${k}`);
     if (el) next[k] = el.value.split(",").map((x) => x.trim()).filter(Boolean);
   });
