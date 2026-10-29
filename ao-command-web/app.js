@@ -687,15 +687,16 @@ async function loadCloudWorkspace(options = {}) {
   try {
     const organizationId = await ensureCloudWorkspace();
     const loadEpoch = workspaceEpoch;
-    const { data, error } = await cloud.client.from("workspace_state").select("*").eq("organization_id", organizationId).maybeSingle();
+    const { data, error } = await cloud.client.rpc("read_chapter_workspace", { p_organization_id: organizationId });
     if (error) throw error;
     if (loadEpoch !== workspaceEpoch) throw new Error("The signed-in account changed. Reload chapter data.");
     // Invalidate queued snapshots whenever a fresh workspace replaces local data.
     workspaceEpoch++;
-    workspaceVersion = { organizationId, updatedAt: data?.updated_at || null, exists: Boolean(data) };
+    if (!data?.updated_at) throw new Error("The chapter workspace is unavailable. Contact your administrator.");
+    workspaceVersion = { organizationId, updatedAt: data.updated_at, exists: true, writableKeys: data.writable_keys || [], baseline: data.data };
     workspaceConflict = false;
     if (data?.data || data?.state) state = sanitizeStateForCurrentRole(normalize(data.data || data.state));
-    else if (!await syncCloudWorkspace(false)) throw new Error("The chapter workspace could not be initialized.");
+    else throw new Error("No chapter data was returned. Contact your administrator.");
     save();
   } catch (err) {
     logSupabaseError("load workspace failed", err);
@@ -731,19 +732,6 @@ async function syncCloudWorkspace(showToast = true) {
     setConnectionStatus("saving", "Saving changes…");
     const organizationId = await ensureCloudWorkspace();
     let dataToSave = normalize(submittedState);
-    if (!canViewKpiMeetings()) {
-      const { data: existing, error: existingError } = await cloud.client.from("workspace_state").select("data").eq("organization_id", organizationId).maybeSingle();
-      if (existingError) throw existingError;
-      const existingState = existing?.data ? normalize(existing.data) : {};
-      dataToSave = {
-        ...dataToSave,
-        kpiMeetings: existingState.kpiMeetings || [],
-        kpiDefinitions: existingState.kpiDefinitions || [],
-        kpiPositionReports: existingState.kpiPositionReports || [],
-        kpiResults: existingState.kpiResults || [],
-        kpiActionItems: existingState.kpiActionItems || []
-      };
-    }
     if (submittingEpoch !== workspaceEpoch) throw new Error("The signed-in account changed. Reload chapter data.");
     const savedVersion = await AOCommandRuntime.saveWorkspaceVersion(cloud.client, {
       organizationId, userId: submittingUserId, payload: dataToSave, version: workspaceVersion
@@ -762,6 +750,16 @@ async function syncCloudWorkspace(showToast = true) {
     return false;
   }
   });
+}
+
+async function versionedWorkspaceRpc(name, parameters) {
+  if (!workspaceVersion?.updatedAt || workspaceConflict) throw new Error("Load the latest chapter data before saving.");
+  const result = await cloud.client.rpc(name, { ...parameters, p_expected_updated_at: workspaceVersion.updatedAt });
+  if (result.error?.code === "PT409") {
+    workspaceConflict = true;
+    setConnectionStatus("error", "Someone saved newer chapter data. Load the latest data before saving again.");
+  }
+  return result;
 }
 
 const uniqueMembersById = (members = []) => [...new Map(members.filter((m) => m?.id).map((m) => [m.id, m])).values()];
@@ -3511,8 +3509,8 @@ function canManageKpis() {
 function canEditKpiReport(report) {
   if (!canViewKpiMeetings()) return false;
   if (canManageKpis()) return true;
-  if (can("kpi.submit_own")) return true;
-  return (report.officerMemberIds || [report.officerMemberId]).includes(cloud.profile?.member_id || cloud.profile?.memberId || "");
+  if (!can("kpi.submit_own") || report.status === "Submitted") return false;
+  return (report.officerMemberIds || [report.officerMemberId]).includes(cloud.currentMembership?.member_id || "");
 }
 
 function kpiReportsForMeeting(meetingId) {
@@ -3643,7 +3641,10 @@ function openKpiReportForm(reportId) {
     </form>`);
   document.getElementById("kpiReportForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    await saveKpiReport(report, Object.fromEntries(new FormData(ev.currentTarget).entries()), definitions, ev.submitter?.value || "Draft");
+    const element = ev.currentTarget;
+    const values = Object.fromEntries(new FormData(element).entries());
+    const status = ev.submitter?.value || "Draft";
+    await AOCommandRuntime.withBusyForm(element, () => saveKpiReport(report, values, definitions, status));
   });
 }
 
@@ -3673,6 +3674,8 @@ function previousKpiResult(definitionId, position, currentReportId = "") {
 }
 
 async function saveKpiReport(report, form, definitions, status) {
+  report = state.kpiPositionReports.find((item) => item.id === report.id) || report;
+  if (!canEditKpiReport(report)) return toast("You do not have permission to edit this report.");
   const now = new Date().toISOString();
   Object.assign(report, {
     overallUpdate: form.overallUpdate || "",
@@ -3742,7 +3745,11 @@ async function copyKpiMeeting(id) {
 
 async function persistWorkspace(successMessage = "Saved.") {
   if (!cloud.user) throw new Error("Sign in before saving chapter records.");
-  if (!await syncCloudWorkspace(false)) throw new Error("Changes were not saved. Keep this form open and try again.");
+  if (!await syncCloudWorkspace(false)) {
+    if (workspaceVersion?.baseline) state = sanitizeStateForCurrentRole(normalize(workspaceVersion.baseline));
+    historyStack.pop();
+    throw new Error("Changes were not saved. Keep this form open and try again.");
+  }
   await loadCloudWorkspace({ throwOnError: true });
   toast(successMessage);
 }
@@ -4382,7 +4389,15 @@ function openForm(key, id) {
   if (!meta) return;
   if (!actionAllowed(key)) return toast("You do not have permission to change these records.");
   const existing = state[key].find((r) => r.id === id);
-  openModal(`<h3>${existing ? `Edit ${meta.title}` : meta.addLabel}</h3><form id="recordForm" class="form-grid">${meta.fields.map((f) => formField(f, existing)).join("")}<div class="wide button-row"><button class="primary" type="submit">Save</button><button class="ghost" type="button" data-close-modal>Cancel</button></div></form>`);
+  const fields = meta.fields.filter(([name]) => {
+    if (key !== "members") return true;
+    if (name === "notes") return can("all");
+    if (["officerRole", "committee"].includes(name)) return can("officers.manage");
+    if (name === "lifecycle") return can("members.archive");
+    if (name === "duesStatus") return false; // Finance records determine this value.
+    return true;
+  });
+  openModal(`<h3>${existing ? `Edit ${meta.title}` : meta.addLabel}</h3><form id="recordForm" class="form-grid">${fields.map((f) => formField(f, existing)).join("")}<div class="wide button-row"><button class="primary" type="submit">Save</button><button class="ghost" type="button" data-close-modal>Cancel</button></div></form>`);
   document.getElementById("recordForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const form = ev.currentTarget;
@@ -4520,7 +4535,7 @@ async function archiveMemberInCloud(memberId) {
     if (!cloud.user?.id) throw new Error("You must be signed in to remove a member.");
     const organizationId = await ensureCloudWorkspace();
     console.info("[AO Command delete]", { userId: cloud.user.id, organizationId, memberId, dependencySummary: deps });
-    const { data, error } = await cloud.client.rpc("archive_member_in_workspace", { p_member_id: memberId });
+    const { data, error } = await versionedWorkspaceRpc("archive_member_secure", { p_member_id: memberId });
     if (error) throw error;
     const result = Array.isArray(data) ? data[0] : data;
     if (!result?.workspace_data) throw new Error("Member archive completed without returning saved workspace data.");
@@ -4812,7 +4827,7 @@ async function saveFinanceAccounts(accounts, successMessage = "Finance ledger sa
     if (!cloud.user?.id) throw new Error("You must be signed in to save finance data.");
     const organizationId = await ensureCloudWorkspace();
     console.info("[AO Command finance]", { userId: cloud.user.id, organizationId, rows: accounts.length, targetTable: "workspace_state.data.financeAccounts" });
-    const { data, error } = await cloud.client.rpc("upsert_finance_accounts_to_workspace", { p_accounts: accounts, p_transactions: options.transactions || [] });
+    const { data, error } = await versionedWorkspaceRpc("save_finance_secure", { p_accounts: accounts, p_transactions: options.transactions || [] });
     if (error) throw error;
     const result = Array.isArray(data) ? data[0] : data;
     if (!result?.workspace_data) throw new Error("Finance save completed without returning saved workspace data.");
@@ -5007,7 +5022,7 @@ async function saveSettingsForm() {
 
   try {
     const workspacePayload = normalize({ ...state, settings: nextSettings });
-    const { data, error } = await cloud.client.rpc("save_chapter_setup", {
+    const { data, error } = await versionedWorkspaceRpc("save_setup_secure", {
       p_setup: nextSettings,
       p_workspace: workspacePayload
     });
@@ -5286,7 +5301,7 @@ async function importMembersCsv(rows) {
       targetTable: "workspace_state.data.members"
     });
 
-    const { data, error } = await cloud.client.rpc("import_members_to_workspace", { p_members: validRows });
+    const { data, error } = await versionedWorkspaceRpc("import_members_secure", { p_members: validRows });
     if (error) throw error;
     const result = Array.isArray(data) ? data[0] : data;
     if (!result?.workspace_data) throw new Error("Import completed without returning saved workspace data.");

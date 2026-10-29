@@ -32,22 +32,22 @@
 
   async function saveWorkspaceVersion(client, { organizationId, userId, payload, version }) {
     if (!version || version.organizationId !== organizationId) throw new Error("Reload chapter data before saving.");
-    // Always advance the token, including two writes within a millisecond.
-    const updatedAt = new Date(Math.max(Date.now(), (Date.parse(version.updatedAt) || 0) + 1)).toISOString();
-    const patch = { data: payload, updated_by: userId, updated_at: updatedAt };
-    let query;
-    if (version.exists) {
-      query = client.from("workspace_state").update(patch).eq("organization_id", organizationId);
-      query = version.updatedAt == null ? query.is("updated_at", null) : query.eq("updated_at", version.updatedAt);
-    } else {
-      // A competing initial save must fail, rather than replacing its data.
-      query = client.from("workspace_state").insert({ organization_id: organizationId, ...patch });
+    if (!userId || !version.updatedAt || !Array.isArray(version.writableKeys)) throw new Error("Reload chapter data before saving.");
+    const changes = {};
+    for (const key of version.writableKeys) {
+      if (Object.hasOwn(payload, key) && JSON.stringify(payload[key]) !== JSON.stringify(version.baseline?.[key])) changes[key] = payload[key];
     }
-    const { data, error } = await query.select("organization_id,updated_at").maybeSingle();
-    if (error?.code === "23505") throw workspaceConflict();
+    // The server derives the actor, checks every changed module, locks the row,
+    // checks this version, and supplies the timestamp. Hidden modules stay there.
+    const { data, error } = await client.rpc("save_chapter_workspace", {
+      p_organization_id: organizationId,
+      p_expected_updated_at: version.updatedAt,
+      p_changes: changes
+    });
+    if (error?.code === "PT409") throw workspaceConflict();
     if (error) throw error;
     if (!data?.updated_at) throw workspaceConflict();
-    return { organizationId: data.organization_id, updatedAt: data.updated_at, exists: true };
+    return { organizationId: data.organization_id, updatedAt: data.updated_at, exists: true, writableKeys: data.writable_keys, baseline: data.data };
   }
 
   root.AOCommandRuntime = Object.freeze({ createSaveQueue, withBusyForm, saveWorkspaceVersion });

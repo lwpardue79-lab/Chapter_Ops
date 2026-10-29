@@ -10,3 +10,4 @@ chapterops-web/*.zip
 outputs/chapterops-lite/*.png
 outputs/chapterops-lite/*.inspect.ndjson
 .vercel
+supabase/.temp/
