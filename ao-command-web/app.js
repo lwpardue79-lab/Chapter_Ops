@@ -121,6 +121,10 @@ let connectionState = { status: "idle", message: "" };
 let authReady = false;
 let accountLoadError = "";
 let authRefreshTimer;
+let workspaceVersion = null;
+let workspaceEpoch = 0;
+let workspaceConflict = false;
+let refreshingWorkspace = false;
 let setupSave = { saving: false, error: "", success: "", fieldErrors: {} };
 let importState = { importing: false, result: null, error: "", rows: [], target: "", validation: null };
 const pendingDeletes = new Set();
@@ -384,6 +388,48 @@ function setConnectionStatus(status, message) {
   element.textContent = navigator.onLine === false ? "You’re offline. Reconnect before saving changes." : message;
   element.dataset.status = navigator.onLine === false ? "error" : status;
   element.classList.toggle("hidden", !cloud.user || (!message && navigator.onLine !== false));
+  if (workspaceConflict && cloud.user) {
+    const recoveryButton = () => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ghost small";
+      button.textContent = refreshingWorkspace ? "Loading…" : "Load latest data";
+      button.disabled = refreshingWorkspace || navigator.onLine === false;
+      button.addEventListener("click", reloadLatestWorkspace);
+      return button;
+    };
+    element.append(" ", recoveryButton());
+    if (!document.getElementById("modalBackdrop").classList.contains("hidden")) {
+      let notice = document.querySelector("#modal .conflict-recovery");
+      if (!notice) {
+        notice = document.createElement("div");
+        notice.className = "connection-status conflict-recovery";
+        notice.setAttribute("role", "alert");
+        document.getElementById("modal").prepend(notice);
+      }
+      notice.textContent = "Newer chapter data is available. Your entries are still here; load the latest data before saving again. ";
+      notice.append(recoveryButton());
+    }
+  }
+}
+
+async function reloadLatestWorkspace() {
+  if (refreshingWorkspace) return;
+  if (!confirm("Load the latest chapter data? Unsaved entries in open forms will be discarded.")) return;
+  refreshingWorkspace = true;
+  setConnectionStatus(connectionState.status, connectionState.message);
+  try {
+    await loadCloudWorkspace({ throwOnError: true });
+    historyStack = [];
+    closeModal();
+    setConnectionStatus("saved", "Latest chapter data loaded. You can make your changes again.");
+    render();
+  } catch (err) {
+    setConnectionStatus("error", formatSupabaseError(err, "Could not load chapter data. Try again."));
+  } finally {
+    refreshingWorkspace = false;
+    setConnectionStatus(connectionState.status, connectionState.message);
+  }
 }
 
 function updateCloudUi(message) {
@@ -492,6 +538,9 @@ async function bootstrapUser() {
 }
 
 function resetSensitiveClientState(role = "Active Member") {
+  workspaceVersion = null;
+  workspaceEpoch++;
+  workspaceConflict = false;
   state = emptyWorkspace();
   state.settings.currentRole = role;
   activeFilters = {};
@@ -637,8 +686,14 @@ async function ensureCloudWorkspace() {
 async function loadCloudWorkspace(options = {}) {
   try {
     const organizationId = await ensureCloudWorkspace();
+    const loadEpoch = workspaceEpoch;
     const { data, error } = await cloud.client.from("workspace_state").select("*").eq("organization_id", organizationId).maybeSingle();
     if (error) throw error;
+    if (loadEpoch !== workspaceEpoch) throw new Error("The signed-in account changed. Reload chapter data.");
+    // Invalidate queued snapshots whenever a fresh workspace replaces local data.
+    workspaceEpoch++;
+    workspaceVersion = { organizationId, updatedAt: data?.updated_at || null, exists: Boolean(data) };
+    workspaceConflict = false;
     if (data?.data || data?.state) state = sanitizeStateForCurrentRole(normalize(data.data || data.state));
     else if (!await syncCloudWorkspace(false)) throw new Error("The chapter workspace could not be initialized.");
     save();
@@ -666,10 +721,13 @@ async function syncCloudWorkspace(showToast = true) {
   // finish out of order in this browser.
   const submittedState = JSON.parse(JSON.stringify(state));
   const submittingUserId = cloud.user?.id;
+  const submittingEpoch = workspaceEpoch;
   return enqueueWorkspaceSave(async () => {
   try {
     if (navigator.onLine === false) throw new Error("You’re offline. Reconnect and retry. Your changes have not been saved.");
     if (!submittingUserId || cloud.user?.id !== submittingUserId) throw new Error("Sign in again before saving changes.");
+    if (submittingEpoch !== workspaceEpoch) throw new Error("The signed-in account changed. Reload chapter data.");
+    if (workspaceConflict) throw Object.assign(new Error("Load the latest chapter data before saving again."), { code: "WORKSPACE_CONFLICT" });
     setConnectionStatus("saving", "Saving changes…");
     const organizationId = await ensureCloudWorkspace();
     let dataToSave = normalize(submittedState);
@@ -686,12 +744,18 @@ async function syncCloudWorkspace(showToast = true) {
         kpiActionItems: existingState.kpiActionItems || []
       };
     }
-    const { error } = await cloud.client.from("workspace_state").upsert({ organization_id: organizationId, data: dataToSave, updated_by: cloud.user.id, updated_at: new Date().toISOString() }, { onConflict: "organization_id" }).select("organization_id").single();
-    if (error) throw error;
+    if (submittingEpoch !== workspaceEpoch) throw new Error("The signed-in account changed. Reload chapter data.");
+    const savedVersion = await AOCommandRuntime.saveWorkspaceVersion(cloud.client, {
+      organizationId, userId: submittingUserId, payload: dataToSave, version: workspaceVersion
+    });
+    if (submittingEpoch !== workspaceEpoch) return false;
+    workspaceVersion = savedVersion;
     setConnectionStatus("saved", "Changes saved to your chapter workspace.");
     if (showToast) toast("Changes synced.");
     return true;
   } catch (err) {
+    if (submittingEpoch !== workspaceEpoch) return false;
+    if (err.code === "WORKSPACE_CONFLICT") workspaceConflict = true;
     logSupabaseError("cloud sync failed", err);
     setConnectionStatus("error", formatSupabaseError(err, "Changes could not be saved. Retry when your connection is restored."));
     toast(formatSupabaseError(err, "Sync failed."));

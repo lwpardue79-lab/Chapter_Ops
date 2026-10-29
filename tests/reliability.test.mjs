@@ -7,7 +7,79 @@ const runtimeSource = await fs.readFile(new URL("../ao-command-web/runtime.js", 
 const appSource = await fs.readFile(new URL("../ao-command-web/app.js", import.meta.url), "utf8");
 const context = vm.createContext({});
 vm.runInContext(runtimeSource, context);
-const { createSaveQueue, withBusyForm } = context.AOCommandRuntime;
+const { createSaveQueue, withBusyForm, saveWorkspaceVersion } = context.AOCommandRuntime;
+
+function workspaceDatabase(initialRow) {
+  let row = initialRow && structuredClone(initialRow);
+  let failure = null;
+  return {
+    current: () => structuredClone(row),
+    failWith: (error) => { failure = error; },
+    client: {
+      from(table) {
+        assert.equal(table, "workspace_state");
+        let patch;
+        let inserting = false;
+        const filters = [];
+        const query = {
+          update(value) { patch = value; return query; },
+          insert(value) { patch = value; inserting = true; return query; },
+          eq(key, value) { filters.push([key, value]); return query; },
+          is(key, value) { filters.push([key, value]); return query; },
+          select() { return query; },
+          async maybeSingle() {
+            if (failure) return { data: null, error: failure };
+            if (inserting && row) return { data: null, error: { code: "23505" } };
+            if (!inserting && (!row || filters.some(([key, value]) => row[key] !== value))) return { data: null, error: null };
+            row = { ...row, ...structuredClone(patch) };
+            return { data: { organization_id: row.organization_id, updated_at: row.updated_at }, error: null };
+          }
+        };
+        return query;
+      }
+    }
+  };
+}
+
+const baseline = { organizationId: "chapter-a", exists: true, updatedAt: "2026-10-29T10:00:00.000Z" };
+const savedRow = { organization_id: "chapter-a", updated_at: baseline.updatedAt, data: { tasks: [] } };
+
+test("two officers cannot overwrite one another using the same loaded version", async () => {
+  const db = workspaceDatabase(savedRow);
+  await saveWorkspaceVersion(db.client, { organizationId: "chapter-a", userId: "officer-a", payload: { tasks: ["first officer's change"] }, version: baseline });
+  await assert.rejects(saveWorkspaceVersion(db.client, { organizationId: "chapter-a", userId: "officer-b", payload: { tasks: ["stale change"] }, version: baseline }), { code: "WORKSPACE_CONFLICT" });
+  assert.deepEqual(db.current().data.tasks, ["first officer's change"]);
+});
+
+test("a confirmed save returns the version needed for a subsequent edit", async () => {
+  const db = workspaceDatabase(savedRow);
+  const version = await saveWorkspaceVersion(db.client, { organizationId: "chapter-a", userId: "officer-a", payload: { tasks: ["first"] }, version: baseline });
+  const next = await saveWorkspaceVersion(db.client, { organizationId: "chapter-a", userId: "officer-a", payload: { tasks: ["first", "second"] }, version });
+  assert.notEqual(next.updatedAt, version.updatedAt);
+  assert.deepEqual(db.current().data.tasks, ["first", "second"]);
+});
+
+test("competing first saves cannot replace an existing chapter workspace", async () => {
+  const db = workspaceDatabase(null);
+  const version = { organizationId: "chapter-a", exists: false, updatedAt: null };
+  await saveWorkspaceVersion(db.client, { organizationId: "chapter-a", userId: "officer-a", payload: { tasks: ["first"] }, version });
+  await assert.rejects(saveWorkspaceVersion(db.client, { organizationId: "chapter-a", userId: "officer-b", payload: {}, version }), { code: "WORKSPACE_CONFLICT" });
+  assert.deepEqual(db.current().data.tasks, ["first"]);
+});
+
+test("saving with no chapter version or a different chapter is blocked", async () => {
+  const db = workspaceDatabase(savedRow);
+  await assert.rejects(saveWorkspaceVersion(db.client, { organizationId: "chapter-b", userId: "officer", payload: {}, version: baseline }), /Reload chapter data/);
+  await assert.rejects(saveWorkspaceVersion(db.client, { organizationId: "chapter-a", userId: "officer", payload: {}, version: null }), /Reload chapter data/);
+  assert.deepEqual(db.current(), savedRow);
+});
+
+test("database permission failures preserve the original error and record", async () => {
+  const db = workspaceDatabase(savedRow);
+  db.failWith({ code: "42501", message: "permission denied" });
+  await assert.rejects(saveWorkspaceVersion(db.client, { organizationId: "chapter-a", userId: "officer", payload: {}, version: baseline }), { code: "42501" });
+  assert.deepEqual(db.current(), savedRow);
+});
 
 test("save queue preserves submission order and recovers after a rejected write", async () => {
   const queue = createSaveQueue();

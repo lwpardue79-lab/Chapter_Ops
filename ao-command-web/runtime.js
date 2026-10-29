@@ -26,5 +26,29 @@
     }
   }
 
-  root.AOCommandRuntime = Object.freeze({ createSaveQueue, withBusyForm });
+  function workspaceConflict() {
+    return Object.assign(new Error("Someone saved newer chapter data. Load the latest data before saving again."), { code: "WORKSPACE_CONFLICT" });
+  }
+
+  async function saveWorkspaceVersion(client, { organizationId, userId, payload, version }) {
+    if (!version || version.organizationId !== organizationId) throw new Error("Reload chapter data before saving.");
+    // Always advance the token, including two writes within a millisecond.
+    const updatedAt = new Date(Math.max(Date.now(), (Date.parse(version.updatedAt) || 0) + 1)).toISOString();
+    const patch = { data: payload, updated_by: userId, updated_at: updatedAt };
+    let query;
+    if (version.exists) {
+      query = client.from("workspace_state").update(patch).eq("organization_id", organizationId);
+      query = version.updatedAt == null ? query.is("updated_at", null) : query.eq("updated_at", version.updatedAt);
+    } else {
+      // A competing initial save must fail, rather than replacing its data.
+      query = client.from("workspace_state").insert({ organization_id: organizationId, ...patch });
+    }
+    const { data, error } = await query.select("organization_id,updated_at").maybeSingle();
+    if (error?.code === "23505") throw workspaceConflict();
+    if (error) throw error;
+    if (!data?.updated_at) throw workspaceConflict();
+    return { organizationId: data.organization_id, updatedAt: data.updated_at, exists: true };
+  }
+
+  root.AOCommandRuntime = Object.freeze({ createSaveQueue, withBusyForm, saveWorkspaceVersion });
 })(globalThis);

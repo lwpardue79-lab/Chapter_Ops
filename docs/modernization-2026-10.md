@@ -24,7 +24,11 @@ An isolated Chrome smoke test passed at 1440px and 390px: signed-out navigation 
 
 ## Remaining database work
 
-Chapter operations still use `workspace_state.data`, a shared JSON document. Serializing writes prevents reordering in one browser, but does not resolve simultaneous writes from different officers/devices. A follow-up migration should add server-side version checks and move module records to separate tables or restricted RPCs.
+Chapter operations still use `workspace_state.data`, a shared JSON document. Workspace saves now use an atomic conditional update matching the `updated_at` value that was loaded. The first save advances that token; a second stale save updates zero rows and is rejected. Initial saves use insert rather than upsert, preventing a competing initialization from replacing an existing workspace. Account changes and fresh workspace loads invalidate queued snapshots.
+
+Conflict recovery offers **Load latest data** in the status area and inside any open form. The user confirms before discarding unsaved entries. The app keeps the original form available when a save fails. Tests simulate two independent editors, repeated saves, competing initialization, and permission failures; no production data was edited to run them. A read-only production schema query confirmed `updated_at` is a non-null timestamp with time zone.
+
+This check protects the updated client workspace-sync path. Older deployed clients and existing dedicated RPCs do not automatically inherit it. Database enforcement across every writer still needs a version-aware RPC/trigger and module-specific tables or restricted RPCs. In particular, a read check followed by an unconditional write would not provide the same protection; this implementation places the version predicate on the update itself.
 
 Existing `workspace.full.read` grants expose the entire JSON document to those roles at the Data API level. Client-side KPI redaction is not database privacy. Assistant Treasurer KPI isolation and module-specific finance privacy require a restricted server read/write interface or normalized tables before they can be called fully enforced.
 
