@@ -116,6 +116,11 @@ let activeFilters = {};
 let historyStack = [];
 let cloud = { client: null, user: null, profile: null, profiles: [], memberships: [], currentMembership: null, organizationId: localStorage.getItem(orgStoreKey) };
 let state = load();
+const enqueueWorkspaceSave = AOCommandRuntime.createSaveQueue();
+let connectionState = { status: "idle", message: "" };
+let authReady = false;
+let accountLoadError = "";
+let authRefreshTimer;
 let setupSave = { saving: false, error: "", success: "", fieldErrors: {} };
 let importState = { importing: false, result: null, error: "", rows: [], target: "", validation: null };
 const pendingDeletes = new Set();
@@ -313,8 +318,6 @@ function snapshot(action, related = {}) {
   historyStack.push(JSON.stringify(state));
   if (historyStack.length > 25) historyStack.shift();
   logActivity(action, related);
-  window.clearTimeout(snapshot.undoTimer);
-  snapshot.undoTimer = window.setTimeout(() => toast(`Change saved: ${action}`, { undo: true }), 0);
 }
 
 function logActivity(action, related = {}) {
@@ -332,24 +335,55 @@ function logActivity(action, related = {}) {
 
 async function initCloud() {
   const cfg = window.AO_COMMAND_CONFIG;
-  if (!window.supabase || !cfg?.supabaseUrl || !cfg?.supabasePublishableKey) return updateCloudUi("Local mode — sign-in unavailable");
+  if (!window.supabase || !cfg?.supabaseUrl || !cfg?.supabasePublishableKey) {
+    connectionState = { status: "error", message: "Sign-in is unavailable. Reload the page or contact your chapter administrator." };
+    return;
+  }
   cloud.client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabasePublishableKey);
-  const { data } = await cloud.client.auth.getSession();
+  const { data, error } = await cloud.client.auth.getSession();
+  if (error) throw error;
   cloud.user = data.session?.user || null;
-  cloud.client.auth.onAuthStateChange(async (event, session) => {
+  // A previous browser cache is never evidence of this account's access.
+  resetSensitiveClientState();
+  // Keep this callback synchronous: database calls must run after the auth lock releases.
+  cloud.client.auth.onAuthStateChange((event, session) => {
     const previousUserId = cloud.user?.id || "";
     cloud.user = session?.user || null;
+    if (event === "INITIAL_SESSION") return;
+    if (event === "TOKEN_REFRESHED" && previousUserId === (cloud.user?.id || "")) return;
+    window.clearTimeout(authRefreshTimer);
     cloud.profile = null;
     cloud.profiles = [];
     cloud.currentMembership = null;
     if (!cloud.user || previousUserId !== cloud.user.id) resetSensitiveClientState();
     updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required");
-    if (event === "PASSWORD_RECOVERY") openNewPasswordModal();
-    if (cloud.user) await bootstrapUser();
-    render();
+    authReady = !cloud.user;
+    accountLoadError = "";
+    authRefreshTimer = window.setTimeout(async () => {
+      try {
+        if (event === "PASSWORD_RECOVERY") openNewPasswordModal();
+        if (cloud.user) await bootstrapUser();
+      } catch (err) {
+        logSupabaseError("account loading failed", err);
+        accountLoadError = "Your account could not be loaded. Reload the page to try again.";
+        setConnectionStatus("error", "Your account could not be loaded. Reload the page to try again.");
+      } finally {
+        authReady = true;
+        render();
+      }
+    }, 0);
   });
   if (cloud.user) await bootstrapUser();
   updateCloudUi(cloud.user ? `Signed in as ${cloud.user.email}` : "Sign in required");
+}
+
+function setConnectionStatus(status, message) {
+  connectionState = { status, message };
+  const element = document.getElementById("connectionStatus");
+  if (!element) return;
+  element.textContent = navigator.onLine === false ? "You’re offline. Reconnect before saving changes." : message;
+  element.dataset.status = navigator.onLine === false ? "error" : status;
+  element.classList.toggle("hidden", !cloud.user || (!message && navigator.onLine !== false));
 }
 
 function updateCloudUi(message) {
@@ -443,7 +477,7 @@ async function bootstrapUser() {
   if (cloud.profile?.approval_status === "approved") {
     state.settings.currentRole = resolvedRole();
     if (isOperationsWorkspaceAllowed()) {
-      await loadCloudWorkspace();
+      await loadCloudWorkspace({ throwOnError: true });
       if (can("attendance.view")) await loadAttendanceManager();
       if (canAny(["events.view", "brotherhood.events.admin.view", "brotherhood.events.manage", "all"])) await loadBrotherhoodEvents();
       if (canViewHandoffs()) await loadOfficerHandoffs();
@@ -606,7 +640,7 @@ async function loadCloudWorkspace(options = {}) {
     const { data, error } = await cloud.client.from("workspace_state").select("*").eq("organization_id", organizationId).maybeSingle();
     if (error) throw error;
     if (data?.data || data?.state) state = sanitizeStateForCurrentRole(normalize(data.data || data.state));
-    else await syncCloudWorkspace(false);
+    else if (!await syncCloudWorkspace(false)) throw new Error("The chapter workspace could not be initialized.");
     save();
   } catch (err) {
     logSupabaseError("load workspace failed", err);
@@ -628,16 +662,23 @@ function sanitizeStateForCurrentRole(nextState) {
 }
 
 async function syncCloudWorkspace(showToast = true) {
+  // Capture each submitted version now; serialize requests so rapid edits cannot
+  // finish out of order in this browser.
+  const submittedState = JSON.parse(JSON.stringify(state));
+  const submittingUserId = cloud.user?.id;
+  return enqueueWorkspaceSave(async () => {
   try {
+    if (navigator.onLine === false) throw new Error("You’re offline. Reconnect and retry. Your changes have not been saved.");
+    if (!submittingUserId || cloud.user?.id !== submittingUserId) throw new Error("Sign in again before saving changes.");
+    setConnectionStatus("saving", "Saving changes…");
     const organizationId = await ensureCloudWorkspace();
-    state = normalize(state);
-    let dataToSave = state;
+    let dataToSave = normalize(submittedState);
     if (!canViewKpiMeetings()) {
       const { data: existing, error: existingError } = await cloud.client.from("workspace_state").select("data").eq("organization_id", organizationId).maybeSingle();
       if (existingError) throw existingError;
       const existingState = existing?.data ? normalize(existing.data) : {};
       dataToSave = {
-        ...state,
+        ...dataToSave,
         kpiMeetings: existingState.kpiMeetings || [],
         kpiDefinitions: existingState.kpiDefinitions || [],
         kpiPositionReports: existingState.kpiPositionReports || [],
@@ -645,13 +686,18 @@ async function syncCloudWorkspace(showToast = true) {
         kpiActionItems: existingState.kpiActionItems || []
       };
     }
-    const { error } = await cloud.client.from("workspace_state").upsert({ organization_id: organizationId, data: dataToSave, updated_by: cloud.user.id, updated_at: new Date().toISOString() }, { onConflict: "organization_id" });
+    const { error } = await cloud.client.from("workspace_state").upsert({ organization_id: organizationId, data: dataToSave, updated_by: cloud.user.id, updated_at: new Date().toISOString() }, { onConflict: "organization_id" }).select("organization_id").single();
     if (error) throw error;
+    setConnectionStatus("saved", "Changes saved to your chapter workspace.");
     if (showToast) toast("Changes synced.");
+    return true;
   } catch (err) {
     logSupabaseError("cloud sync failed", err);
+    setConnectionStatus("error", formatSupabaseError(err, "Changes could not be saved. Retry when your connection is restored."));
     toast(formatSupabaseError(err, "Sync failed."));
+    return false;
   }
+  });
 }
 
 const uniqueMembersById = (members = []) => [...new Map(members.filter((m) => m?.id).map((m) => [m.id, m])).values()];
@@ -1370,6 +1416,14 @@ const collectionMeta = {
 };
 
 function render() {
+  if (!authReady || !cloud.client || accountLoadError) {
+    document.querySelector(".nav").innerHTML = "";
+    document.getElementById("appRoot").innerHTML = connectionState.status === "error" || accountLoadError
+      ? `<section class="panel empty-state"><h3>Unable to connect</h3><p>${safe(accountLoadError || connectionState.message)}</p><button class="primary" onclick="window.location.reload()">Reload AO Command</button></section>`
+      : `<section class="panel empty-state" role="status"><h3>Opening AO Command</h3><p>Loading your account…</p></section>`;
+    return;
+  }
+  setConnectionStatus(connectionState.status, connectionState.message);
   refreshNavigation();
   if (cloud.client && cloud.user && cloud.profile?.approval_status === "approved" && !routeAllowed(activeView)) activeView = defaultViewForRole();
   const signedOut = cloud.client && !cloud.user;
@@ -3623,11 +3677,9 @@ async function copyKpiMeeting(id) {
 }
 
 async function persistWorkspace(successMessage = "Saved.") {
-  save();
-  if (cloud.user) {
-    await syncCloudWorkspace(false);
-    await loadCloudWorkspace({ throwOnError: true });
-  }
+  if (!cloud.user) throw new Error("Sign in before saving chapter records.");
+  if (!await syncCloudWorkspace(false)) throw new Error("Changes were not saved. Keep this form open and try again.");
+  await loadCloudWorkspace({ throwOnError: true });
   toast(successMessage);
 }
 
@@ -4269,7 +4321,9 @@ function openForm(key, id) {
   openModal(`<h3>${existing ? `Edit ${meta.title}` : meta.addLabel}</h3><form id="recordForm" class="form-grid">${meta.fields.map((f) => formField(f, existing)).join("")}<div class="wide button-row"><button class="primary" type="submit">Save</button><button class="ghost" type="button" data-close-modal>Cancel</button></div></form>`);
   document.getElementById("recordForm").addEventListener("submit", async (ev) => {
     ev.preventDefault();
-    await saveRow(key, Object.fromEntries(new FormData(ev.currentTarget).entries()), id);
+    const form = ev.currentTarget;
+    const row = Object.fromEntries(new FormData(form).entries());
+    await AOCommandRuntime.withBusyForm(form, () => saveRow(key, row, id));
   });
 }
 
@@ -4307,15 +4361,21 @@ function selectOptions(opts) {
 }
 
 async function saveRow(key, row, id) {
+  if (!cloud.user || !actionAllowed(key)) return toast("Sign in with permission to change these records.");
   const validation = validateRow(key, row, id);
   if (validation) return toast(validation);
+  const previous = JSON.parse(JSON.stringify(state));
   snapshot(id ? `${labelize(key)} edited` : `${labelize(key)} added`, { type: key, id, description: row.firstName ? `${row.firstName} ${row.lastName}` : row.title || row.name || row.type });
   if (key === "finance") row.amount = parseMoney(row.amount);
   if (id) state[key] = state[key].map((r) => r.id === id ? { ...r, ...row } : r);
   else state[key].unshift({ id: uid(key[0]), ...row, archived: false });
   recalcMemberDues();
-  save(); closeModal(); render();
-  if (cloud.user) await syncCloudWorkspace(false);
+  if (!await syncCloudWorkspace(false)) {
+    state = previous;
+    historyStack.pop();
+    return;
+  }
+  save(); closeModal(); render(); toast("Record saved.");
 }
 
 function validateRow(key, row, id) {
@@ -4341,7 +4401,9 @@ function samePerson(a, b) {
 
 async function archiveRow(key, id) {
   if (key === "members") return deleteRow(key, id);
+  if (!cloud.user || !actionAllowed(key)) return toast("You do not have permission to archive these records.");
   if (!confirm("Archive this record? It will be hidden but not permanently deleted.")) return;
+  const previous = JSON.parse(JSON.stringify(state));
   snapshot(`${labelize(key)} archived`, { type: key, id });
   const row = state[key].find((r) => r.id === id);
   if (row) {
@@ -4350,18 +4412,20 @@ async function archiveRow(key, id) {
     if (row.lifecycle) row.lifecycle = "Archived";
   }
   recalcMemberDues();
-  save(); render(); toast("Archived. Use Undo if needed.");
-  if (cloud.user) await syncCloudWorkspace(false);
+  if (!await syncCloudWorkspace(false)) { state = previous; historyStack.pop(); return; }
+  save(); render(); toast("Record archived.", { undo: true });
 }
 
 async function deleteRow(key, id) {
   if (key === "members") return archiveMemberInCloud(id);
+  if (!cloud.user || !actionAllowed(key)) return toast("You do not have permission to delete these records.");
   if (!confirm("Permanently delete this record? Archive is safer. Continue only if you are sure.")) return;
+  const previous = JSON.parse(JSON.stringify(state));
   snapshot(`${labelize(key)} deleted`, { type: key, id });
   state[key] = state[key].filter((r) => r.id !== id);
   recalcMemberDues();
-  save(); render(); toast("Deleted. Use Undo if needed.");
-  if (cloud.user) await syncCloudWorkspace(false);
+  if (!await syncCloudWorkspace(false)) { state = previous; historyStack.pop(); return; }
+  save(); render(); toast("Record deleted.", { undo: true });
 }
 
 function memberDependencySummary(memberId) {
@@ -4905,6 +4969,7 @@ async function saveSettingsForm() {
 }
 
 function openLeadershipForm(id) {
+  if (!can("officers.manage")) return toast("You do not have permission to change leadership assignments.");
   const existing = state.leadership.find((l) => l.id === id);
   const normalizedExisting = existing ? { ...existing, role: canonicalPositionTitle(existing.role), responsibilityLabel: existing.responsibilityLabel || positionResponsibilityLabel(canonicalPositionTitle(existing.role), existing.role) } : null;
   const fields = [["role", "Formal executive position", "select", "officerRoles"], ["assignedMember", "Assigned member", "select", "members"], ["responsibilityLabel", "Plain-language responsibility label", "text"], ["committee", "Committee", "select", "committees"], ["termStartDate", "Term start date", "date"], ["termEndDate", "Term end date", "date"], ["responsibilities", "Responsibilities", "textarea"], ["relatedReports", "Related reports", "text"]];
@@ -4919,10 +4984,13 @@ function openLeadershipForm(id) {
     row.isExecutive = true;
     row.is_executive = true;
     if (isDuplicateLeadershipAssignment(row, id)) return toast("That member already has this officer assignment.");
+    const previous = JSON.parse(JSON.stringify(state));
     snapshot(existing ? "Officer role edited" : "Officer role added", { type: "leadership", id });
     if (existing) Object.assign(existing, row); else state.leadership.unshift({ id: uid("l"), ...row });
-    save(); closeModal(); render();
-    if (cloud.user) await syncCloudWorkspace(false);
+    await AOCommandRuntime.withBusyForm(ev.currentTarget, async () => {
+      if (!await syncCloudWorkspace(false)) { state = previous; historyStack.pop(); return; }
+      save(); closeModal(); render(); toast("Leadership assignment saved.");
+    });
   });
 }
 
@@ -5106,6 +5174,7 @@ async function confirmCsvImport() {
   if (importState.importing) return;
   if (target === "members") return importMembersCsv(rows);
   if (target === "finance") return importFinanceCsv();
+  const previous = JSON.parse(JSON.stringify(state));
 
   try {
     importState.importing = true;
@@ -5113,8 +5182,8 @@ async function confirmCsvImport() {
     snapshot(`${labelize(target)} CSV imported`, { type: "import", description: `${rows.length} rows` });
     rows.forEach((row) => importRow(target, row));
     recalcMemberDues();
+    if (!await syncCloudWorkspace(false)) throw new Error("Import was not saved. Retry the import after reconnecting.");
     save();
-    if (cloud.user) await syncCloudWorkspace(false);
     importState.result = { totalRows: rows.length, validRows: rows.length, inserted: rows.length, updated: 0, skipped: 0, failed: 0, failedRows: [] };
     importState.error = "";
     importState.importing = false;
@@ -5122,6 +5191,8 @@ async function confirmCsvImport() {
     renderImportPreview();
     toast("CSV import complete.");
   } catch (err) {
+    state = previous;
+    historyStack.pop();
     logSupabaseError("CSV import failed", err);
     importState.importing = false;
     importState.error = formatSupabaseError(err, "CSV import failed.");
@@ -5755,10 +5826,14 @@ function exportBackup() {
   download("ao-command-alpha-omega-backup.json", JSON.stringify(state, null, 2), "application/json");
 }
 
-function undo() {
-  const last = historyStack.pop();
+async function undo() {
+  if (!cloud.user) return toast("Sign in before undoing a change.");
+  const last = historyStack.at(-1);
   if (!last) return toast("Nothing to undo.");
+  const previous = state;
   state = normalize(JSON.parse(last));
+  if (!await syncCloudWorkspace(false)) { state = previous; return; }
+  historyStack.pop();
   save(); render(); toast("Last change undone.");
 }
 
@@ -5773,14 +5848,28 @@ function clearWorkspace() {
   save(); render(); toast("Local data cleared.");
 }
 
+let modalReturnFocus = null;
+let toastTimer;
+
 function openModal(html) {
+  if (document.getElementById("modalBackdrop").classList.contains("hidden")) modalReturnFocus = document.activeElement;
   document.getElementById("modal").innerHTML = html;
   document.getElementById("modalBackdrop").classList.remove("hidden");
+  document.querySelector(".app-shell").inert = true;
+  document.body.classList.add("dialog-open");
+  const heading = document.querySelector("#modal h3");
+  if (heading) { heading.id = "dialogTitle"; document.getElementById("modalBackdrop").setAttribute("aria-labelledby", "dialogTitle"); }
+  else document.getElementById("modalBackdrop").removeAttribute("aria-labelledby");
+  document.getElementById("modal").focus();
   document.querySelectorAll("[data-close-modal]").forEach((b) => b.addEventListener("click", closeModal));
 }
 
 function closeModal() {
   document.getElementById("modalBackdrop").classList.add("hidden");
+  document.querySelector(".app-shell").inert = false;
+  document.body.classList.remove("dialog-open");
+  if (modalReturnFocus?.isConnected) modalReturnFocus.focus();
+  modalReturnFocus = null;
 }
 
 function toast(message, options = {}) {
@@ -5790,7 +5879,8 @@ function toast(message, options = {}) {
     : safe(message);
   el.classList.remove("hidden");
   el.querySelector("[data-toast-undo]")?.addEventListener("click", undo);
-  setTimeout(() => el.classList.add("hidden"), 3000);
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => el.classList.add("hidden"), options.undo ? 8000 : 5000);
 }
 
 document.addEventListener("click", (ev) => {
@@ -5836,6 +5926,17 @@ document.addEventListener("click", (ev) => {
   if (!ev.target.closest("#addMemberMenu")) document.getElementById("addMemberDropdown").classList.add("hidden");
 });
 document.addEventListener("keydown", (ev) => {
+  if (!document.getElementById("modalBackdrop").classList.contains("hidden")) {
+    if (ev.key === "Escape") { ev.preventDefault(); closeModal(); return; }
+    if (ev.key === "Tab") {
+      const items = [...document.querySelectorAll('#modal button:not([disabled]), #modal input:not([disabled]), #modal select:not([disabled]), #modal textarea:not([disabled]), #modal a[href]')].filter((el) => el.getClientRects().length);
+      const first = items[0];
+      const last = items.at(-1);
+      if (!first) { ev.preventDefault(); return; }
+      if (ev.shiftKey && (document.activeElement === first || document.activeElement.id === "modal")) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && (document.activeElement === last || document.activeElement.id === "modal")) { ev.preventDefault(); first.focus(); }
+    }
+  }
   const isSearchShortcut = (ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k";
   if (!isSearchShortcut || ev.target?.closest?.("input, textarea, select")) return;
   ev.preventDefault();
@@ -5852,4 +5953,15 @@ document.getElementById("importFile").addEventListener("change", (ev) => ev.targ
 document.getElementById("resetBtn").addEventListener("click", clearWorkspace);
 
 applyLocationRoute();
-initCloud().finally(render);
+window.addEventListener("offline", () => setConnectionStatus(connectionState.status, connectionState.message));
+window.addEventListener("online", () => setConnectionStatus("idle", "Connection restored. Retry any changes that failed to save."));
+window.addEventListener("unhandledrejection", (event) => {
+  logSupabaseError("request failed", event.reason);
+  toast("The request could not be completed. Your changes have not been confirmed saved. Please retry.");
+});
+initCloud().catch((err) => {
+  logSupabaseError("startup failed", err);
+  accountLoadError = "Your account could not be loaded. Reload the page to try again.";
+  connectionState = { status: "error", message: "Your account could not be loaded. Reload the page to try again." };
+}).finally(() => { authReady = true; render(); });
+render();

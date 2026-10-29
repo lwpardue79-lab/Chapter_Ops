@@ -8,9 +8,13 @@
     <meta property="og:title" content="AO Command | Alpha Omega Chapter" />
     <meta property="og:description" content="A private chapter management platform for the Alpha Omega Chapter of Pi Kappa Alpha." />
     <meta name="theme-color" content="#132d46" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <a class="skip-link" href="#appRoot">Skip to content</a>
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">
@@ -69,7 +73,8 @@
           </div>
         </header>
 
-        <div id="appRoot"></div>
+        <div class="connection-status hidden" id="connectionStatus" role="status" aria-live="polite"></div>
+        <div id="appRoot" tabindex="-1"></div>
         <footer class="app-footer" aria-label="Application footer">
           <strong>AO Command</strong>
           <span>Alpha Omega Chapter · Pi Kappa Alpha</span>
@@ -79,13 +84,14 @@
       </main>
     </div>
 
-    <div class="modal-backdrop hidden" id="modalBackdrop" role="dialog" aria-modal="true">
-      <section class="modal" id="modal"></section>
+    <div class="modal-backdrop hidden" id="modalBackdrop" role="dialog" aria-modal="true" aria-label="AO Command dialog">
+      <section class="modal" id="modal" tabindex="-1"></section>
     </div>
-    <div class="toast hidden" id="toast"></div>
+    <div class="toast hidden" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" crossorigin="anonymous"></script>
     <script src="/config.js"></script>
+    <script src="/runtime.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>
