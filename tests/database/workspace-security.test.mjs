@@ -47,7 +47,7 @@ await loadLegacy('202607171330_add_member_archive_rpc.sql','archive_member_in_wo
 await loadLegacy('202607171330_add_member_archive_rpc.sql','import_members_to_workspace');
 await loadLegacy('202607171545_add_finance_ledger_rpc.sql','upsert_finance_accounts_to_workspace');
 await loadLegacy('202607132018_fix_save_chapter_setup_return_ambiguity.sql','save_chapter_setup');
-for (const filename of ['20261029151909_secure_workspace_api.sql','20261029152433_enforce_workspace_api.sql']) {
+for (const filename of ['20261029151909_secure_workspace_api.sql','20261029152433_enforce_workspace_api.sql','20261107012252_annual_executive_budget.sql']) {
   await db.exec(await fs.readFile(new URL(`supabase/migrations/${filename}`, root),'utf8'));
 }
 
@@ -200,4 +200,77 @@ test('The settings endpoint rejects a stale version',async()=>asUser(admin,async
   await assert.rejects(db.query('select public.save_setup_secure($1,$2,$3)',[document.settings,{},view.updated_at]),{code:'PT409'});
 }));
 test('A browser cannot directly update the raw workspace row',async()=>asUser(admin,async()=>assert.rejects(db.query('update workspace_state set data=$1 where organization_id=$2',[{},org]),{code:'42501'})));
+const budgetRead = async(budgetId=null,chapter=org)=>(await db.query('select public.read_annual_budget($1,$2) value',[chapter,budgetId])).rows[0].value;
+const budgetSave = async(budgetId,revision,action,payload,request=crypto.randomUUID())=>(await db.query('select public.save_annual_budget($1,$2,$3,$4,$5,$6) value',[org,budgetId,revision,request,action,payload])).rows[0].value;
+async function budgetFixture() {
+  const budgetId=crypto.randomUUID(),lineId=crypto.randomUUID();
+  let view=await budgetSave(budgetId,null,'create',{name:'Isolated budget test',starts_on:'2026-07-01'});
+  view=await budgetSave(budgetId,view.budget.revision,'line',{id:lineId,title:'Local allocation',kind:'expense',category:'Programs',monthly_plan_cents:Array(12).fill(10000)});
+  return {budgetId,lineId,view};
+}
+test('Annual budget, monthly allocations, and real activity read back from Postgres',async()=>asUser(assistant,async()=>{
+  const {budgetId,lineId,view}=await budgetFixture();
+  const saved=await budgetSave(budgetId,view.budget.revision,'entry',{id:crypto.randomUUID(),line_id:lineId,transaction_date:'2026-10-05',amount_cents:82525,description:'Local SQL fixture',vendor:'private payee',private_notes:'private note'});
+  const reloaded=await budgetRead(budgetId);
+  assert.equal(reloaded.lines[0].actual_cents[3],82525); assert.equal(reloaded.entries.length,1);
+  assert.equal(saved.budget.revision,reloaded.budget.revision);
+}));
+test('Budget double submission with same request is idempotent',async()=>asUser(assistant,async()=>{
+  const budgetId=crypto.randomUUID(),request=crypto.randomUUID(),payload={name:'Idempotency test',starts_on:'2026-07-01'};
+  await budgetSave(budgetId,null,'create',payload,request); const again=await budgetSave(budgetId,null,'create',payload,request);
+  assert.equal(again.budget.revision,1); assert.equal(again.budgets.length,1);
+}));
+test('Stale budget saves are rejected instead of overwriting officer edits',async()=>asUser(assistant,async()=>{
+  const {budgetId,view}=await budgetFixture(); await budgetSave(budgetId,view.budget.revision,'header',{name:'Changed',status:'Active'});
+  await assert.rejects(budgetSave(budgetId,view.budget.revision,'header',{name:'Stale',status:'Active'}),{code:'PT409'});
+}));
+test('Budget transaction corrections require a reason',async()=>asUser(assistant,async()=>{
+  const {budgetId,lineId,view}=await budgetFixture(),entryId=crypto.randomUUID();
+  const payload={id:entryId,line_id:lineId,transaction_date:'2026-10-01',amount_cents:1,description:'Local entry'};
+  const saved=await budgetSave(budgetId,view.budget.revision,'entry',payload);
+  await assert.rejects(budgetSave(budgetId,saved.budget.revision,'entry',{...payload,amount_cents:2}),/correction reason/);
+}));
+test('Voiding activity preserves the transaction and audit history but removes it from totals',async()=>asUser(assistant,async()=>{
+  const {budgetId,lineId,view}=await budgetFixture(),entryId=crypto.randomUUID();
+  const saved=await budgetSave(budgetId,view.budget.revision,'entry',{id:entryId,line_id:lineId,transaction_date:'2026-10-01',amount_cents:900,description:'Local entry'});
+  const result=await budgetSave(budgetId,saved.budget.revision,'void',{id:entryId,reason:'Duplicate receipt'});
+  assert.equal(result.lines[0].actual_cents[3],0); assert.ok(result.entries[0].voided_at);
+  const audit=await db.query("select count(*)::int n from annual_budget_changes where budget_id=$1",[budgetId]); assert.equal(audit.rows[0].n,4);
+}));
+test('Zero and negative actuals are preserved and repeated workbook imports do not duplicate entries',async()=>asUser(assistant,async()=>{
+  const {budgetId,view}=await budgetFixture();
+  const payload={lines:[{title:'Imported',category:'Operations',kind:'expense',source_key:'sheet:10',monthly_plan_cents:Array(12).fill(0),actual_cents:[0,-8000,...Array(10).fill(null)]}]};
+  let result=await budgetSave(budgetId,view.budget.revision,'import',payload);
+  result=await budgetSave(budgetId,result.budget.revision,'import',payload);
+  assert.equal(result.lines.length,2); assert.equal(result.entries.length,2);
+  assert.deepEqual(result.lines.find(l=>l.source_key==='sheet:10').actual_cents.slice(0,2),[0,-8000]);
+}));
+test('Closed budgets reject financial edits',async()=>asUser(assistant,async()=>{
+  const {budgetId,view}=await budgetFixture();const closed=await budgetSave(budgetId,view.budget.revision,'header',{name:'Closed budget',status:'Closed'});
+  await assert.rejects(budgetSave(budgetId,closed.budget.revision,'import',{lines:[]}),{code:'42501'});
+}));
+test('A transaction outside its budget year is rejected',async()=>asUser(assistant,async()=>{
+  const {budgetId,lineId,view}=await budgetFixture();
+  await assert.rejects(budgetSave(budgetId,view.budget.revision,'entry',{id:crypto.randomUUID(),line_id:lineId,transaction_date:'2027-07-01',amount_cents:1,description:'Outside'}),/inside the budget year/);
+}));
+test('Budget column edits cannot bypass versioned RPC',async()=>asUser(assistant,async()=>{
+  await assert.rejects(db.query("insert into annual_budgets(organization_id,name,starts_on,created_by,updated_by) values($1,'Forbidden','2026-07-01',$2,$2)",[org,assistant]),{code:'42501'});
+}));
+test('An Active Member cannot read annual budgets',async()=>asUser(member,async()=>{
+  assert.equal((await db.query('select * from annual_budgets')).rows.length,0);
+  await assert.rejects(budgetRead(),{code:'42501'});
+}));
+test('Recruitment cannot retrieve annual finances through a direct API',async()=>asUser(recruiter,async()=>assert.rejects(budgetRead(),{code:'42501'})));
+test('Budget data is isolated between chapters',async()=>asUser(outsider,async()=>assert.rejects(budgetRead(),{code:'42501'})));
+test('Read-only budget report omits vendor, private notes, and financial transactions',async()=>{
+  await db.query("insert into app_role_permissions(role,permission_key) values('executive','budget.view') on conflict do nothing");
+  try { await asUser(assistant,async()=>{
+    const {budgetId,lineId,view}=await budgetFixture();
+    await budgetSave(budgetId,view.budget.revision,'entry',{id:crypto.randomUUID(),line_id:lineId,transaction_date:'2026-10-01',amount_cents:10,description:'secret',private_notes:'secret',vendor:'secret'});
+    await db.query("select set_config('request.jwt.claim.sub',$1,true)",[officer]);
+    const report=await budgetRead(budgetId); assert.equal(report.entries.length,0); assert.equal(report.can_manage,false); assert.equal(JSON.stringify(report).includes('secret'),false);
+    assert.equal((await db.query('select * from annual_budget_entries')).rows.length,0);
+  }); } finally { await db.query("delete from app_role_permissions where role='executive' and permission_key='budget.view'"); }
+});
+test('Read-only users cannot modify budgets through the write API',async()=>asUser(officer,async()=>assert.rejects(budgetSave(crypto.randomUUID(),null,'create',{name:'Forbidden',starts_on:'2026-07-01'}),{code:'42501'})));
 test.after(async()=>{ await db.close(); });

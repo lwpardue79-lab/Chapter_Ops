@@ -17,6 +17,8 @@ const files = {
   "/styles.css": { file: "styles.css", type: "text/css; charset=utf-8" },
   "/app.js": { file: "app.js", type: "application/javascript; charset=utf-8" },
   "/runtime.js": { file: "runtime.js", type: "application/javascript; charset=utf-8" },
+  "/budget-core.js": { file: "budget-core.js", type: "application/javascript; charset=utf-8" },
+  "/budget-ui.js": { file: "budget-ui.js", type: "application/javascript; charset=utf-8" },
   "/icon.svg": { file: "icon.svg", type: "image/svg+xml" },
   "/manifest.webmanifest": { file: "manifest.webmanifest", type: "application/manifest+json" },
   "/config.js": { file: "config.js", type: "application/javascript; charset=utf-8" }

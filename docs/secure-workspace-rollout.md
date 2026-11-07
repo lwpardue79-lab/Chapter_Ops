@@ -1,6 +1,8 @@
 # Secure workspace API: review and rollout
 
-Status: implemented and locally tested; **not applied to production**. Automatic approval review rejected the production migration because it changes multiple security APIs, permissions, and triggers. Explicit approval of this concrete release is required before production execution. Do not push this frontend independently of the database rollout.
+Status: **deployed to production**. The user approved the concrete release. Migration 1 was applied October 29, 2026. On November 6, the matching frontend was deployed to Vercel and its public file checksums verified; migration 2 was then applied. Existing browser tabs must reload. No chapter records were reset, deleted, or seeded.
+
+Production verification: authenticated Admin workspace/budget reads succeed; a versioned workspace save succeeded inside a rolled-back transaction. Raw browser table reads/updates and legacy setup/import endpoints are denied. Transaction-scoped role tests confirm Assistant Treasurer receives finance without KPI/recruitment and Recruitment receives PNMs without finance/accounts. Role changes and writes were rolled back. The workspace checksum remains `06bc1e67ab4dab2a7f949cdf097bf06f`. Signed-out desktop/mobile browser checks passed. Live authenticated browser imports, edits, logout/login and second-device persistence remain user acceptance tests; do not infer them from the SQL tests.
 
 ## Why this release is needed
 

@@ -1,6 +1,6 @@
 # AO Command RBAC and Supabase RLS Audit
 
-For the prepared October 2026 security release and its deployment gate, see [Secure workspace rollout](secure-workspace-rollout.md). That release is locally tested and pending production approval; the historical findings below are not evidence that it has been deployed.
+For the October 2026 security release, deployed November 6 after user approval and frontend verification, see [Secure workspace rollout](secure-workspace-rollout.md). That document records current production checks and remaining browser acceptance tests; the historical findings below describe earlier releases.
 
 Date: 2026-07-17  
 App: AO Command production deployment

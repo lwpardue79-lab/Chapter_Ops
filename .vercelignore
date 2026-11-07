@@ -1,0 +1,15 @@
+# Publish application source only; financial transfer files stay on this device.
+outputs/
+tests/
+docs/
+supabase/
+.git/
+.codex/
+.agents/
+node_modules/
+.pnpm-store/
+dist/
+*.xlsx
+*.zip
+scripts/prepare-budget-transfer.py
+scripts/test-budget-browser.mjs

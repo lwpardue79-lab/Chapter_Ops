@@ -11,3 +11,4 @@ outputs/chapterops-lite/*.png
 outputs/chapterops-lite/*.inspect.ndjson
 .vercel
 supabase/.temp/
+outputs/private-budget/**

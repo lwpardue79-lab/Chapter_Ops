@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-sites.mjs",
-    "check": "node --check ao-command-web/app.js && node --check ao-command-web/runtime.js",
+    "check": "node --check ao-command-web/app.js && node --check ao-command-web/runtime.js && node --check ao-command-web/budget-core.js && node --check ao-command-web/budget-ui.js",
     "test": "node --test tests/*.test.mjs",
     "test:db": "node --test tests/database/*.test.mjs",
     "dev": "python3 -m http.server 4173 --directory ao-command-web"

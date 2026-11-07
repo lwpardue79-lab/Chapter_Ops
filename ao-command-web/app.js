@@ -25,6 +25,7 @@ const viewNames = {
   recruitment: "Recruitment Pipeline",
   events: "Events & Attendance",
   finance: "Financial Operations",
+  budget: "Annual Budget",
   kpis: "KPI Reports",
   tasks: "Action Center",
   reports: "Reports & Analytics",
@@ -45,6 +46,10 @@ const roleRules = {
   "Active Member": ["member.portal.view", "members.self.view", "finance.self.view", "attendance.self.view", "events.member.view", "events.rsvp", "tasks.view_own"],
   "Read-only Advisor": ["workspace.full.read", "dashboard.role.view", "dashboard.executive.view", "members.list.view", "officers.view", "handoffs.view", "handoffs.access", "events.view", "brotherhood.events.admin.view", "attendance.view", "reports.executive.view", "reports.finance.view", "view_kpi_meetings", "kpi.view"]
 };
+// Annual operating budgets are separate from member billing. Read-only access
+// exposes aggregates; detailed activity requires finance-management permission.
+for (const role of ["President", "Treasurer", "Assistant Treasurer", "Read-only Advisor"]) roleRules[role].push("budget.view", "budget.report");
+for (const role of ["Treasurer", "Assistant Treasurer"]) roleRules[role].push("budget.manage");
 const legacyPermissionMap = {
   view_all: "members.list.view",
   view_basic: "member.portal.view",
@@ -67,6 +72,7 @@ const navigationItems = [
   { view: "recruitment", label: "Recruitment Pipeline", permission: "recruitment.view" },
   { view: "events", label: "Events & Attendance", permission: "attendance.view" },
   { view: "finance", label: "Financial Operations", permission: "finance.member_balances.view" },
+  { view: "budget", label: "Annual Budget", permission: "budget.view" },
   { view: "kpis", label: "KPI Reports", permission: "view_kpi_meetings" },
   { view: "tasks", label: "Action Center", permission: "tasks.view_all" },
   { view: "reports", label: "Reports & Analytics", permission: "reports.executive.view" },
@@ -76,7 +82,7 @@ const navigationSections = [
   { label: "Overview", views: ["dashboard", "alerts", "tasks"] },
   { label: "Members", views: ["members", "leadership", "handoffs"] },
   { label: "Recruitment & Brotherhood", views: ["recruitment", "brotherhood", "events"] },
-  { label: "Finance", views: ["finance"] },
+  { label: "Finance", views: ["finance", "budget"] },
   { label: "Reporting", views: ["kpis", "reports"] },
   { label: "System", views: ["settings"] }
 ];
@@ -538,6 +544,7 @@ async function bootstrapUser() {
 }
 
 function resetSensitiveClientState(role = "Active Member") {
+  AOCommandBudgetUI.reset();
   workspaceVersion = null;
   workspaceEpoch++;
   workspaceConflict = false;
@@ -1533,6 +1540,7 @@ function render() {
     recruitment: () => renderCollection("pnms"),
     events: () => renderCollection("events"),
     finance: () => renderCollection("finance"),
+    budget: () => AOCommandBudgetUI.render(),
     kpis: renderKpiReports,
     tasks: () => renderCollection("tasks"),
     leadership: renderLeadership,
@@ -2863,6 +2871,7 @@ function renderFinanceLedger() {
       <div><h3>Financial Operations</h3><p class="muted">Member balances, charges, payments, and payment plans.</p></div>
       <div class="button-row">
         <input class="search" id="searchInput" placeholder="Search name, member ID, status, balances" value="${safe(filter.q || "")}" />
+        ${can("budget.view") ? '<button class="ghost" data-go="budget">Annual Budget</button>' : ""}
         ${can("finance.import") ? `<button class="ghost" data-import="finance">Import Finance CSV</button>` : ""}
         ${can("finance.export") ? `<button class="ghost" data-export="finance-filtered">Export filtered</button><button class="ghost" data-export="finance-all">Export all</button><button class="ghost" data-finance-template>Template</button>` : ""}
       </div>
@@ -3900,6 +3909,7 @@ function emptySmall(text) {
 }
 
 function bindViewActions(root) {
+  AOCommandBudgetUI.bind(root);
   root.querySelectorAll("[data-member-tab]").forEach((el) => el.addEventListener("click", () => setMemberPortalTab(el.dataset.memberTab)));
   root.querySelectorAll("[data-refresh-member-portal]").forEach((el) => el.addEventListener("click", async () => { await loadMemberPortal(); render(); }));
   root.querySelector("#memberProfileForm")?.addEventListener("submit", saveMyMemberProfile);
@@ -4371,6 +4381,7 @@ function applyFilter(view, filter) {
 }
 
 function setView(view) {
+  if (view !== "budget") AOCommandBudgetUI.leave();
   if (view === "portal") {
     setMemberPortalTab("home");
     return;
@@ -5926,6 +5937,12 @@ function clearWorkspace() {
   oldStoreKeys.forEach((key) => localStorage.removeItem(key));
   save(); render(); toast("Local data cleared.");
 }
+
+AOCommandBudgetUI.configure({
+  can,
+  context: () => ({ client: cloud.client, userId: cloud.user?.id, organizationId: cloud.organizationId }),
+  render, openModal, closeModal, toast, download, canonicalPosition: canonicalPositionTitle
+});
 
 let modalReturnFocus = null;
 let toastTimer;
